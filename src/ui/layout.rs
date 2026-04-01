@@ -3,13 +3,13 @@
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Paragraph};
 
-use super::App;
+use super::PlayingState;
 use super::board_view;
 use super::chat_panel;
 use super::game_log;
 use super::resource_bar;
 
-/// Draw the full TUI layout.
+/// Draw the full TUI game layout (used during the Playing screen).
 ///
 /// ```text
 /// +------------------------------------------+------------------+
@@ -26,7 +26,7 @@ use super::resource_bar;
 /// |  Status bar: speed, paused, controls                         |
 /// +--------------------------------------------------------------+
 /// ```
-pub fn draw(f: &mut Frame, app: &App) {
+pub fn draw_playing(f: &mut Frame, ps: &PlayingState) {
     let size = f.area();
 
     // Main vertical split: top (board + players) | bottom (log + chat) | status bar.
@@ -49,9 +49,9 @@ pub fn draw(f: &mut Frame, app: &App) {
         .split(main_chunks[0]);
 
     // Render board.
-    if let Some(state) = &app.state {
+    if let Some(state) = &ps.state {
         board_view::render_board(state, top_chunks[0], f.buffer_mut());
-        resource_bar::render_players(state, &app.player_names, top_chunks[1], f.buffer_mut());
+        resource_bar::render_players(state, &ps.player_names, top_chunks[1], f.buffer_mut());
     } else {
         let waiting = Paragraph::new("Waiting for game to start...")
             .block(
@@ -83,14 +83,14 @@ pub fn draw(f: &mut Frame, app: &App) {
         .split(main_chunks[1]);
 
     // Render game log and AI chat.
-    game_log::render_log(&app.messages, app.log_scroll, bottom_chunks[0], f.buffer_mut());
-    chat_panel::render_chat(&app.chat_messages, app.chat_scroll, bottom_chunks[1], f.buffer_mut());
+    game_log::render_log(&ps.messages, ps.log_scroll, bottom_chunks[0], f.buffer_mut());
+    chat_panel::render_chat(&ps.chat_messages, ps.chat_scroll, bottom_chunks[1], f.buffer_mut());
 
     // Status bar.
-    let pause_indicator = if app.paused { " PAUSED " } else { "" };
+    let pause_indicator = if ps.paused { " PAUSED " } else { "" };
     let status = Line::from(vec![
         Span::styled(
-            format!(" Speed: {}ms ", app.speed_ms),
+            format!(" Speed: {}ms ", ps.speed_ms),
             Style::default().fg(Color::Cyan),
         ),
         Span::styled(
@@ -102,7 +102,7 @@ pub fn draw(f: &mut Frame, app: &App) {
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
-            if app.game_over { " GAME OVER " } else { "" },
+            if ps.game_over { " GAME OVER — press Enter " } else { "" },
             Style::default().fg(Color::Black).bg(Color::Green).bold(),
         ),
     ]);
