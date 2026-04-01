@@ -1,0 +1,22 @@
+[package]
+name = "settl"
+version = "0.1.0"
+edition = "2021"
+description = "Terminal Settlers of Catan with LLM players"
+
+[dependencies]
+ratatui = "0.29"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+clap = { version = "4", features = ["derive"] }
+rand = "0.8"
+crossterm = "0.28"
+toml = "0.8"
+genai = "0.6.0-beta.13"
+async-trait = "0.1.89"
+reqwest = "0.13.2"
+
+[dev-dependencies]
+proptest = "1"
+tempfile = "3"
