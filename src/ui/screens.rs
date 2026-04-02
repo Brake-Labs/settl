@@ -1,4 +1,4 @@
-//! Non-game screens: Title, MainMenu, NewGame setup, FilePicker, PostGame.
+//! Non-game screens: Title, MainMenu, NewGame setup, PostGame.
 //!
 //! Each screen has a state struct and a `draw_*` rendering function.
 //! Input handling lives in `mod.rs` dispatch.

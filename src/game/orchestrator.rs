@@ -915,10 +915,9 @@ fn action_to_event(action: &Action, player: PlayerId, reasoning: &str) -> Option
             reasoning: reasoning.to_string(),
         }),
         Action::BuyDevCard => Some(GameEvent::DevCardBought { player }),
-        Action::PlayDevCard(card, dev_action) => Some(GameEvent::DevCardPlayed {
+        Action::PlayDevCard(card, _dev_action) => Some(GameEvent::DevCardPlayed {
             player,
             card: card.clone(),
-            action: dev_action.clone(),
             reasoning: reasoning.to_string(),
         }),
         Action::BankTrade { give, get } => Some(GameEvent::BankTradeExecuted {

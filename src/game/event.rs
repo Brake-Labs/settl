@@ -2,13 +2,11 @@
 //!
 //! Used for LLM context (recent history) and UI event streaming.
 
-use serde::{Deserialize, Serialize};
-
-use crate::game::actions::{DevCard, DevCardAction, PlayerId, TradeOffer};
+use crate::game::actions::{DevCard, PlayerId, TradeOffer};
 use crate::game::board::{EdgeCoord, HexCoord, Resource, VertexCoord};
 
 /// Every discrete game event.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub enum GameEvent {
     // -- Setup --
     InitialSettlementPlaced {
@@ -19,16 +17,8 @@ pub enum GameEvent {
         player: PlayerId,
         edge: EdgeCoord,
     },
-    InitialResourcesGranted {
-        player: PlayerId,
-        resources: Vec<(Resource, u32)>,
-    },
 
     // -- Turn flow --
-    TurnStarted {
-        player: PlayerId,
-        turn_number: u32,
-    },
     DiceRolled {
         player: PlayerId,
         values: (u8, u8),
@@ -90,7 +80,6 @@ pub enum GameEvent {
     DevCardPlayed {
         player: PlayerId,
         card: DevCard,
-        action: DevCardAction,
         reasoning: String,
     },
 
@@ -103,16 +92,6 @@ pub enum GameEvent {
     CardsDiscarded {
         player: PlayerId,
         cards: Vec<Resource>,
-    },
-
-    // -- Special awards --
-    LongestRoadClaimed {
-        player: PlayerId,
-        length: u8,
-    },
-    LargestArmyClaimed {
-        player: PlayerId,
-        knights: u32,
     },
 
     // -- Game end --
@@ -272,7 +251,6 @@ pub fn format_event(event: &GameEvent, player_names: &[String]) -> String {
         GameEvent::DevCardPlayed {
             player,
             card,
-            action: _,
             reasoning,
         } => {
             format!("{} played {} -- {}", name(*player), card, reasoning)
@@ -297,19 +275,8 @@ pub fn format_event(event: &GameEvent, player_names: &[String]) -> String {
             let card_str: Vec<String> = cards.iter().map(|r| format!("{}", r)).collect();
             format!("{} discarded {}", name(*player), card_str.join(", "))
         }
-        GameEvent::LongestRoadClaimed { player, length } => {
-            format!("{} claimed Longest Road ({})", name(*player), length)
-        }
-        GameEvent::LargestArmyClaimed { player, knights } => {
-            format!(
-                "{} claimed Largest Army ({} knights)",
-                name(*player),
-                knights
-            )
-        }
         GameEvent::GameWon { player, final_vp } => {
             format!("{} wins with {} VP!", name(*player), final_vp)
         }
-        _ => format!("{:?}", event),
     }
 }
