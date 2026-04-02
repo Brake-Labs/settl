@@ -8,8 +8,8 @@ use super::screens::*;
 use super::testing::*;
 use super::*;
 
-const WIDTH: u16 = 120;
-const HEIGHT: u16 = 40;
+const WIDTH: u16 = 170;
+const HEIGHT: u16 = 65;
 
 // ── Non-game screens ─────────────────────────────────────────────────
 
@@ -30,13 +30,21 @@ fn snapshot_title_screen_blink_off() {
 
 #[test]
 fn snapshot_main_menu() {
-    let screen = Screen::MainMenu(MainMenuState::new());
+    // Use explicit state to avoid filesystem-dependent menu items.
+    let state = MainMenuState {
+        selected: 0,
+        has_save_files: false,
+        has_replay_files: false,
+    };
+    let screen = Screen::MainMenu(state);
     let buf = render_to_buffer(&screen, WIDTH, HEIGHT);
     insta::assert_snapshot!("main_menu", buffer_to_string(&buf));
 }
 
 #[test]
 fn snapshot_new_game() {
+    // Set USER env var for deterministic player name.
+    std::env::set_var("USER", "Player");
     let screen = Screen::NewGame(NewGameState::new(&[]));
     let buf = render_to_buffer(&screen, WIDTH, HEIGHT);
     insta::assert_snapshot!("new_game", buffer_to_string(&buf));

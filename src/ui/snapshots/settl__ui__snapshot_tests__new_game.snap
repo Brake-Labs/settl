@@ -3,23 +3,21 @@ source: src/ui/snapshot_tests.rs
 expression: buffer_to_string(&buf)
 ---
 
-                                                        New Game
+                                                                                 New Game
 
-                            Players: 4  (press +/- to change)
+                                                     Players: 4  (press +/- to change)
 
-                             #  Name         Type     Model              Personality
-                            > 1  Player       Human    —                  —
-                              2  Bob          Random   —                  —
-                              3  Charlie      Random   —                  —
-                              4  Diana        Random   —                  —
+                                                      #  Name         Type     Model              Personality
+                                                     > 1  Player       Human    —                  —
+                                                       2  Bob          Random   —                  —
+                                                       3  Charlie      Random   —                  —
+                                                       4  Diana        Random   —                  —
 
-                            ────────────────────────────────────────────────────────────────
-                              Seed: [random]
-                              Max Turns: [500]
+                                                     ────────────────────────────────────────────────────────────────
+                                                       Seed: [random]
+                                                       Max Turns: [500]
 
-                              [ Start Game ]
-
-
+                                                       [ Start Game ]
 
 
 
@@ -41,4 +39,31 @@ expression: buffer_to_string(&buf)
 
 
 
-                       ↑↓: move  |  ←→/Tab: change  |  Enter: start  |  +/-: players  |  Esc: back
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                ↑↓: move  |  ←→/Tab: change  |  Enter: start  |  +/-: players  |  Esc: back

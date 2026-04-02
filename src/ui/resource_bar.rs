@@ -3,7 +3,7 @@
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Paragraph};
 
-use super::PLAYER_COLORS;
+use super::PLAYER_TEXT_COLORS;
 use crate::game::board::Resource;
 use crate::game::state::GameState;
 
@@ -23,7 +23,7 @@ pub fn render_players(state: &GameState, player_names: &[String], area: Rect, bu
     let mut lines: Vec<Line> = Vec::new();
 
     for (i, ps) in state.players.iter().enumerate() {
-        let color = PLAYER_COLORS.get(i).copied().unwrap_or(Color::White);
+        let color = PLAYER_TEXT_COLORS.get(i).copied().unwrap_or(Color::White);
         let vp = state.victory_points(i);
         let name = player_names.get(i).map(|s| s.as_str()).unwrap_or("???");
 

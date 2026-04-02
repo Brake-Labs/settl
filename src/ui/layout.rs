@@ -39,11 +39,11 @@ pub fn draw_playing(f: &mut Frame, ps: &PlayingState) {
         .split(size);
 
     // Top horizontal split: board | players (or board | AI panel if toggled).
-    let right_panel_width = if ps.show_ai_panel { 30 } else { 22 };
+    let right_panel_width = if ps.show_ai_panel { 38 } else { 30 };
     let top_chunks = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Min(50),                   // Board
+            Constraint::Min(107),                  // Board
             Constraint::Length(right_panel_width), // Players or AI panel
         ])
         .split(main_chunks[0]);

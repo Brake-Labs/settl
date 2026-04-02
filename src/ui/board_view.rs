@@ -13,13 +13,13 @@ use super::{CursorKind, InputMode, PLAYER_COLORS};
 // ── Layout constants ──────────────────────────────────────────────────
 
 /// Horizontal distance between hex centers in the same row.
-const HEX_COL_Q: i16 = 12;
+const HEX_COL_Q: i16 = 20;
 /// Horizontal offset per r-row (half of HEX_COL_Q).
-const HEX_COL_R: i16 = 6;
+const HEX_COL_R: i16 = 10;
 /// Vertical distance between hex row centers.
-const HEX_ROW: i16 = 5;
+const HEX_ROW: i16 = 9;
 /// Vertical offset from center to North/South vertex.
-const VERT_OFF: i16 = 3;
+const VERT_OFF: i16 = 5;
 
 // ── Terrain colors ───────────────────────────────────────────────────
 
@@ -36,19 +36,6 @@ fn terrain_color(t: Terrain) -> Color {
 
 fn terrain_fg(_t: Terrain) -> Color {
     Color::White
-}
-
-// ── Probability dots ────────────────────────────────────────────────
-
-fn probability_dots(number: u8) -> &'static str {
-    match number {
-        2 | 12 => "\u{00b7}",
-        3 | 11 => "\u{00b7}\u{00b7}",
-        4 | 10 => "\u{00b7}\u{00b7}\u{00b7}",
-        5 | 9 => "\u{00b7}\u{00b7}\u{00b7}\u{00b7}",
-        6 | 8 => "\u{00b7}\u{00b7}\u{00b7}\u{00b7}\u{00b7}",
-        _ => "",
-    }
 }
 
 // ── HexGrid ─────────────────────────────────────────────────────────
@@ -80,11 +67,11 @@ impl HexGrid {
         let mut edge_pos: HashMap<EdgeCoord, (i16, i16)> = HashMap::new();
 
         // Compute hex centers. The base offset ensures all coords are positive.
-        // Min q=-2, min r=-2. With the formula col = q*HEX_COL_Q + r*HEX_COL_R,
-        // min col = -2*12 + (-2)*6 = -36. So base_col = 38 to add margin.
-        // Min row = -2*5 = -10. N vertex extends VERT_OFF(3) above. So base_row = 14.
-        let base_col: i16 = 38;
-        let base_row: i16 = 14;
+        // Actual min col: q=-2, r=0 -> -40. Hex extends 10 left to -50.
+        // So base_col = 52 for 2 margin.
+        // Min row: r=-2 -> -18. N vertex at -18-5 = -23. So base_row = 25.
+        let base_col: i16 = 52;
+        let base_row: i16 = 25;
 
         for &c in &coords {
             let cx = c.q as i16 * HEX_COL_Q + c.r as i16 * HEX_COL_R + base_col;
@@ -92,17 +79,7 @@ impl HexGrid {
             hex_centers.insert(c, (cx, cy));
         }
 
-        // Compute ALL 6 vertex positions per hex. This is critical for border
-        // hexes whose side vertices (NE/SE/SW/NW) reference off-board hex
-        // coordinates that would otherwise never be added.
-        //
-        // Vertex offsets from hex center (cx, cy):
-        //   v0 N:  ( 0,           -VERT_OFF)
-        //   v1 NE: (+HEX_COL_R,  -side_dy)     where side_dy = HEX_ROW - VERT_OFF
-        //   v2 SE: (+HEX_COL_R,  +side_dy)
-        //   v3 S:  ( 0,           +VERT_OFF)
-        //   v4 SW: (-HEX_COL_R,  +side_dy)
-        //   v5 NW: (-HEX_COL_R,  -side_dy)
+        // Compute ALL 6 vertex positions per hex.
         let side_dy = HEX_ROW - VERT_OFF;
         for &c in &coords {
             let (cx, cy) = hex_centers[&c];
@@ -123,16 +100,7 @@ impl HexGrid {
                 .or_insert((cx - HEX_COL_R, cy - side_dy));
         }
 
-        // Compute ALL 6 edge midpoint positions per hex. Same border issue:
-        // the SW/W/NW edges canonicalize to off-board hex coordinates.
-        //
-        // Edge midpoint offsets from hex center (cx, cy):
-        //   e0 NE: (+half_r, -edge_dy)    where half_r = HEX_COL_R/2, edge_dy = VERT_OFF-1
-        //   e1 E:  (+HEX_COL_R, 0)
-        //   e2 SE: (+half_r, +edge_dy)
-        //   e3 SW: (-half_r, +edge_dy)
-        //   e4 W:  (-HEX_COL_R, 0)
-        //   e5 NW: (-half_r, -edge_dy)
+        // Compute ALL 6 edge midpoint positions per hex.
         let half_r = HEX_COL_R / 2;
         let edge_dy = VERT_OFF - 1;
         for &c in &coords {
@@ -154,8 +122,12 @@ impl HexGrid {
                 .or_insert((cx - half_r, cy - edge_dy));
         }
 
-        // Bounding box: hex extends cx-6..cx+6 horizontally, cy-3..cy+3 vertically.
-        let max_col = hex_centers.values().map(|(c, _)| c + 7).max().unwrap_or(0);
+        // Bounding box: hex extends cx-10..cx+10 horizontally, cy-5..cy+5 vertically.
+        let max_col = hex_centers
+            .values()
+            .map(|(c, _)| c + HEX_COL_R + 1)
+            .max()
+            .unwrap_or(0);
         let max_row = hex_centers
             .values()
             .map(|(_, r)| r + VERT_OFF + 1)
@@ -244,27 +216,40 @@ pub fn render_board(
         }
     }
 
-    // Layer 3: Draw buildings.
+    // Layer 3: Draw buildings (multi-row colored blocks).
+    // Settlements: 5w x 2h block with ▲. Cities: 5w x 3h block with ■.
     for (vertex, building) in &state.buildings {
         if let Some(&(vx, vy)) = grid.vertex_pos.get(vertex) {
-            let scr_col = off_col as i16 + vx;
-            let scr_row = off_row as i16 + vy;
-            let (player_id, ch) = match building {
-                Building::Settlement(p) => (*p, '\u{25b2}'), // ▲
-                Building::City(p) => (*p, '\u{25a0}'),       // ■
+            let sx = off_col as i16 + vx;
+            let sy = off_row as i16 + vy;
+            let player_id = match building {
+                Building::Settlement(p) | Building::City(p) => *p,
             };
             let color = PLAYER_COLORS
                 .get(player_id)
                 .copied()
                 .unwrap_or(Color::White);
-            set_cell(
-                scr_col,
-                scr_row,
-                ch,
-                Style::default().fg(color).bold(),
-                inner,
-                buf,
-            );
+            let bg_style = Style::default().bg(color);
+            let sym_style = Style::default().fg(Color::White).bg(color).bold();
+            match building {
+                Building::Settlement(_) => {
+                    // 5w x 2h: top row has ▲, bottom row is solid
+                    for dx in -2..=2i16 {
+                        set_cell(sx + dx, sy - 1, ' ', bg_style, inner, buf);
+                        set_cell(sx + dx, sy, ' ', bg_style, inner, buf);
+                    }
+                    set_cell(sx, sy - 1, '\u{25b2}', sym_style, inner, buf); // ▲
+                }
+                Building::City(_) => {
+                    // 5w x 3h: center row has ■, top and bottom are solid
+                    for dx in -2..=2i16 {
+                        set_cell(sx + dx, sy - 1, ' ', bg_style, inner, buf);
+                        set_cell(sx + dx, sy, ' ', bg_style, inner, buf);
+                        set_cell(sx + dx, sy + 1, ' ', bg_style, inner, buf);
+                    }
+                    set_cell(sx, sy, '\u{25a0}', sym_style, inner, buf); // ■
+                }
+            }
         }
     }
 
@@ -293,18 +278,11 @@ pub fn render_board(
     draw_cursor_overlay(grid, off_col, off_row, inner, buf, input_mode);
 }
 
-/// Draw a single hex cell with outlines, terrain fill, and probability dots.
+/// Draw a single hex cell with terrain fill (no border slashes) and probability dots.
 ///
-/// With HEX_COL_Q=12, HEX_ROW=5, VERT_OFF=3 the hex is a wide hexagon:
-/// ```text
-///          ·                cy-3: N vertex
-///        ╱   ╲              cy-2: upper diags
-///      ╱  Wo  6 ╲           cy-1: terrain + number
-///     · ·······   ·         cy:   side verts + dots
-///      ╲         ╱          cy+1: lower diags
-///        ╲     ╱            cy+2: closing diags
-///          ·                cy+3: S vertex
-/// ```
+/// The hex shape is defined purely by colored fill expanding from the vertex to
+/// the widest center row. No `╱`/`╲` border characters -- terrain color alone
+/// defines the hex boundary.
 fn draw_hex_cell(
     hex: &crate::game::board::Hex,
     state: &GameState,
@@ -318,27 +296,22 @@ fn draw_hex_cell(
     let is_robber = state.robber_hex == hex.coord;
     let fill_bg = if is_robber { Color::Red } else { bg };
     let fill = Style::default().bg(fill_bg);
-    let bg_fill = Style::default().bg(bg);
 
-    let edge_style = Style::default().fg(Color::DarkGray);
+    // Row cy-5: N vertex (left empty for building/port/cursor layers)
+    // Row cy-4: left empty for gap between vertex and hex fill
 
-    // Row cy-3: N vertex (left empty for building/port/cursor layers)
-
-    // Row cy-2: upper diagonals with interior fill
-    set_cell(cx - 3, cy - 2, '\u{2571}', edge_style, area, buf); // ╱
-    for dx in -2..=2i16 {
+    // Rows cy-3 through cy-1: expanding fill (inset by 1 for gap between hexes)
+    for dx in -3..=3i16 {
+        set_cell(cx + dx, cy - 3, ' ', fill, area, buf);
+    }
+    for dx in -5..=5i16 {
         set_cell(cx + dx, cy - 2, ' ', fill, area, buf);
     }
-    set_cell(cx + 3, cy - 2, '\u{2572}', edge_style, area, buf); // ╲
-
-    // Row cy-1: wider diagonals + terrain label + number
-    set_cell(cx - 5, cy - 1, '\u{2571}', edge_style, area, buf); // ╱
-    for dx in -4..=4i16 {
+    for dx in -7..=7i16 {
         set_cell(cx + dx, cy - 1, ' ', fill, area, buf);
     }
-    set_cell(cx + 5, cy - 1, '\u{2572}', edge_style, area, buf); // ╲
 
-    // Terrain abbreviation + number
+    // Terrain label on row cy-1
     let abbr = hex.terrain.abbr();
     let text_style = if is_robber {
         Style::default().fg(Color::White).bg(Color::Red).bold()
@@ -347,69 +320,59 @@ fn draw_hex_cell(
     };
 
     if is_robber {
-        set_cell(cx - 3, cy - 1, 'R', text_style, area, buf);
+        set_cell(cx - 5, cy - 1, 'R', text_style, area, buf);
         for (i, ch) in abbr.chars().enumerate() {
-            set_cell(cx - 1 + i as i16, cy - 1, ch, text_style, area, buf);
+            set_cell(cx - 3 + i as i16, cy - 1, ch, text_style, area, buf);
         }
     } else {
         for (i, ch) in abbr.chars().enumerate() {
-            set_cell(cx - 2 + i as i16, cy - 1, ch, text_style, area, buf);
+            set_cell(cx - 4 + i as i16, cy - 1, ch, text_style, area, buf);
         }
+    }
+
+    // Row cy: widest row -- number token centered (inset by 1)
+    for dx in -8..=8i16 {
+        set_cell(cx + dx, cy, ' ', fill, area, buf);
     }
 
     if let Some(n) = hex.number_token {
         let num_str = format!("{:>2}", n);
         let is_hot = n == 6 || n == 8;
-        let num_style = if is_hot {
+        let num_style = if is_hot && is_robber {
+            Style::default().fg(Color::White).bg(fill_bg).bold()
+        } else if is_hot {
             Style::default().fg(Color::Red).bg(fill_bg).bold()
         } else {
             Style::default().fg(fg).bg(fill_bg)
         };
         for (i, ch) in num_str.chars().enumerate() {
-            set_cell(cx + 1 + i as i16, cy - 1, ch, num_style, area, buf);
+            set_cell(cx - 1 + i as i16, cy, ch, num_style, area, buf);
         }
-    } else if !is_robber {
-        set_cell(cx + 1, cy - 1, '-', text_style, area, buf);
-        set_cell(cx + 2, cy - 1, '-', text_style, area, buf);
+    } else if is_robber {
+        let robber_style = Style::default().fg(Color::White).bg(Color::Red).bold();
+        set_cell(cx, cy, 'R', robber_style, area, buf);
+    } else {
+        set_cell(cx - 1, cy, '-', text_style, area, buf);
+        set_cell(cx, cy, '-', text_style, area, buf);
     }
 
-    // Row cy: widest row -- side vertices at cx±6, probability dots centered
+    // Rows cy+1 through cy+4: contracting fill (inset by 1)
+    for dx in -7..=7i16 {
+        set_cell(cx + dx, cy + 1, ' ', fill, area, buf);
+    }
+
     for dx in -5..=5i16 {
-        set_cell(cx + dx, cy, ' ', bg_fill, area, buf);
+        set_cell(cx + dx, cy + 2, ' ', fill, area, buf);
+    }
+    for dx in -3..=3i16 {
+        set_cell(cx + dx, cy + 3, ' ', fill, area, buf);
     }
 
-    if let Some(n) = hex.number_token {
-        let dots = probability_dots(n);
-        let is_hot = n == 6 || n == 8;
-        let dots_style = if is_hot {
-            Style::default().fg(Color::Red).bg(bg).bold()
-        } else {
-            Style::default().fg(Color::DarkGray).bg(bg)
-        };
-        let dot_start = cx - (dots.chars().count() as i16) / 2;
-        for (i, ch) in dots.chars().enumerate() {
-            set_cell(dot_start + i as i16, cy, ch, dots_style, area, buf);
-        }
-    }
-
-    // Row cy+1: lower diagonals
-    set_cell(cx - 5, cy + 1, '\u{2572}', edge_style, area, buf); // ╲
-    for dx in -4..=4i16 {
-        set_cell(cx + dx, cy + 1, ' ', bg_fill, area, buf);
-    }
-    set_cell(cx + 5, cy + 1, '\u{2571}', edge_style, area, buf); // ╱
-
-    // Row cy+2: closing diagonals
-    set_cell(cx - 3, cy + 2, '\u{2572}', edge_style, area, buf); // ╲
-    for dx in -2..=2i16 {
-        set_cell(cx + dx, cy + 2, ' ', bg_fill, area, buf);
-    }
-    set_cell(cx + 3, cy + 2, '\u{2571}', edge_style, area, buf); // ╱
-
-    // Row cy+3: S vertex (left empty for building/port/cursor layers)
+    // Row cy+4: left empty for gap between hex fill and vertex
+    // Row cy+5: S vertex (left empty for building/port/cursor layers)
 }
 
-/// Draw a road segment at an edge midpoint.
+/// Draw a road segment as a colored block between vertices.
 fn draw_road_segment(
     dir: EdgeDirection,
     mx: i16,
@@ -418,19 +381,36 @@ fn draw_road_segment(
     area: Rect,
     buf: &mut Buffer,
 ) {
-    let style = Style::default().fg(color).bold();
+    let style = Style::default().bg(color);
     match dir {
-        EdgeDirection::NorthEast | EdgeDirection::SouthEast => {
-            // Horizontal-ish segment
-            set_cell(mx - 1, my, '\u{2550}', style, area, buf); // ═
-            set_cell(mx, my, '\u{2550}', style, area, buf);
-            set_cell(mx + 1, my, '\u{2550}', style, area, buf);
+        EdgeDirection::NorthEast => {
+            // Double-wide diagonal, 4 rows
+            set_cell(mx - 3, my - 2, ' ', style, area, buf);
+            set_cell(mx - 2, my - 2, ' ', style, area, buf);
+            set_cell(mx - 2, my - 1, ' ', style, area, buf);
+            set_cell(mx - 1, my - 1, ' ', style, area, buf);
+            set_cell(mx, my, ' ', style, area, buf);
+            set_cell(mx + 1, my, ' ', style, area, buf);
+            set_cell(mx + 1, my + 1, ' ', style, area, buf);
+            set_cell(mx + 2, my + 1, ' ', style, area, buf);
+        }
+        EdgeDirection::SouthEast => {
+            // Double-wide diagonal, 4 rows
+            set_cell(mx - 3, my + 2, ' ', style, area, buf);
+            set_cell(mx - 2, my + 2, ' ', style, area, buf);
+            set_cell(mx - 2, my + 1, ' ', style, area, buf);
+            set_cell(mx - 1, my + 1, ' ', style, area, buf);
+            set_cell(mx, my, ' ', style, area, buf);
+            set_cell(mx + 1, my, ' ', style, area, buf);
+            set_cell(mx + 1, my - 1, ' ', style, area, buf);
+            set_cell(mx + 2, my - 1, ' ', style, area, buf);
         }
         EdgeDirection::East => {
-            // Vertical segment
-            set_cell(mx, my - 1, '\u{2551}', style, area, buf); // ║
-            set_cell(mx, my, '\u{2551}', style, area, buf);
-            set_cell(mx, my + 1, '\u{2551}', style, area, buf);
+            // Double-wide vertical block spanning 5 rows
+            for dy in -2..=2i16 {
+                set_cell(mx - 1, my + dy, ' ', style, area, buf);
+                set_cell(mx, my + dy, ' ', style, area, buf);
+            }
         }
     }
 }
@@ -486,9 +466,23 @@ fn draw_cursor_overlay(
                         } else {
                             legal_style
                         };
-                        set_cell(sx - 1, sy, '=', style, area, buf);
-                        set_cell(sx, sy, '=', style, area, buf);
-                        set_cell(sx + 1, sy, '=', style, area, buf);
+                        match e.dir {
+                            EdgeDirection::NorthEast => {
+                                set_cell(sx - 1, sy - 1, '=', style, area, buf);
+                                set_cell(sx, sy, '=', style, area, buf);
+                                set_cell(sx + 1, sy + 1, '=', style, area, buf);
+                            }
+                            EdgeDirection::SouthEast => {
+                                set_cell(sx - 1, sy + 1, '=', style, area, buf);
+                                set_cell(sx, sy, '=', style, area, buf);
+                                set_cell(sx + 1, sy - 1, '=', style, area, buf);
+                            }
+                            EdgeDirection::East => {
+                                for dy in -2..=2i16 {
+                                    set_cell(sx, sy + dy, '=', style, area, buf);
+                                }
+                            }
+                        }
                     }
                 }
             }

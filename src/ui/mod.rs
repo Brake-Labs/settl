@@ -37,8 +37,16 @@ use crate::replay::save::SaveGame;
 
 use screens::*;
 
-/// Player colors shared across all UI panels.
-pub const PLAYER_COLORS: [Color; 4] = [Color::Red, Color::Blue, Color::Green, Color::Magenta];
+/// Bright player colors for buildings and roads on the board.
+pub const PLAYER_COLORS: [Color; 4] = [
+    Color::LightRed,
+    Color::LightBlue,
+    Color::LightGreen,
+    Color::LightMagenta,
+];
+
+/// Standard player colors for text labels in panels.
+pub const PLAYER_TEXT_COLORS: [Color; 4] = [Color::Red, Color::Blue, Color::Green, Color::Magenta];
 
 /// Events sent from the game orchestrator to the TUI.
 #[derive(Debug, Clone)]

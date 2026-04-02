@@ -4,20 +4,18 @@ expression: buffer_to_string(&buf)
 ---
 
 
-                                   ┌────────────────── Game Over ───────────────────┐
-                                   │                   Alice wins!                  │
-                                   │                                                │
-                                   │ ★ Alice            10 VP                       │
-                                   │   Bob               7 VP                       │
-                                   │   Charlie           5 VP                       │
-                                   │   Diana             4 VP                       │
-                                   └────────────────────────────────────────────────┘
+                                                            ┌────────────────── Game Over ───────────────────┐
+                                                            │                   Alice wins!                  │
+                                                            │                                                │
+                                                            │ ★ Alice            10 VP                       │
+                                                            │   Bob               7 VP                       │
+                                                            │   Charlie           5 VP                       │
+                                                            │   Diana             4 VP                       │
+                                                            └────────────────────────────────────────────────┘
 
-                                                     > Play Again
-                                                       Main Menu
-                                                       Quit
-
-
+                                                                              > Play Again
+                                                                                Main Menu
+                                                                                Quit
 
 
 
@@ -41,4 +39,31 @@ expression: buffer_to_string(&buf)
 
 
 
-                                              [↑↓] navigate  [Enter] select
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                                                       [↑↓] navigate  [Enter] select
