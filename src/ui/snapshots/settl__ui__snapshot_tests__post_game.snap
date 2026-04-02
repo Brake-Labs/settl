@@ -1,0 +1,44 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&buf)
+---
+
+
+                                   ┌────────────────── Game Over ───────────────────┐
+                                   │                   Alice wins!                  │
+                                   │                                                │
+                                   │ ★ Alice            10 VP                       │
+                                   │   Bob               7 VP                       │
+                                   │   Charlie           5 VP                       │
+                                   │   Diana             4 VP                       │
+                                   └────────────────────────────────────────────────┘
+
+                                                     > Play Again
+                                                       Main Menu
+                                                       Quit
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                              [↑↓] navigate  [Enter] select

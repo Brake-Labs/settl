@@ -1,7 +1,7 @@
 //! TUI layout -- splits the terminal into board, players, context bar, and status.
 
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 
 use crate::game::board::Resource;
 
@@ -48,6 +48,15 @@ pub fn draw_playing(f: &mut Frame, ps: &PlayingState) {
         ])
         .split(main_chunks[0]);
 
+    // Split right panel vertically: players (top) + game log (bottom).
+    let right_split = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(20), // Players (4 players * ~4 lines + game info)
+            Constraint::Min(5),     // Game Log
+        ])
+        .split(top_chunks[1]);
+
     // Render board.
     if let Some(state) = &ps.state {
         if let Some(ref grid) = ps.hex_grid {
@@ -73,7 +82,8 @@ pub fn draw_playing(f: &mut Frame, ps: &PlayingState) {
                 f.buffer_mut(),
             );
         } else {
-            resource_bar::render_players(state, &ps.player_names, top_chunks[1], f.buffer_mut());
+            resource_bar::render_players(state, &ps.player_names, right_split[0], f.buffer_mut());
+            game_log::render_log(&ps.messages, u16::MAX, right_split[1], f.buffer_mut());
         }
     } else {
         let waiting = Paragraph::new("Waiting for game to start...")
@@ -92,7 +102,8 @@ pub fn draw_playing(f: &mut Frame, ps: &PlayingState) {
                 .borders(Borders::ALL)
                 .border_style(Style::default().fg(Color::Cyan)),
         );
-        f.render_widget(no_players, top_chunks[1]);
+        f.render_widget(no_players, right_split[0]);
+        game_log::render_log(&ps.messages, u16::MAX, right_split[1], f.buffer_mut());
     }
 
     // Context bar (mode-dependent content).
@@ -100,6 +111,11 @@ pub fn draw_playing(f: &mut Frame, ps: &PlayingState) {
 
     // Status bar.
     draw_status_bar(f, ps, main_chunks[2]);
+
+    // Help overlay (drawn last so it sits on top).
+    if ps.show_help {
+        draw_help_overlay(f, size);
+    }
 }
 
 /// Draw the context bar based on the current input mode.
@@ -368,7 +384,7 @@ fn draw_status_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
             Style::default().fg(Color::Black).bg(Color::Cyan).bold(),
         ),
         Span::styled(
-            " | q:quit  Tab:AI panel  Space:pause  +/-:speed ",
+            " | q:quit  ?:help  Tab:AI  Space:pause  +/-:speed ",
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
@@ -382,6 +398,80 @@ fn draw_status_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
     ]);
     let status_paragraph = Paragraph::new(status);
     f.render_widget(status_paragraph, area);
+}
+
+// ── Help Overlay ──────────────────────────────────────────────────
+
+/// Draw a centered help overlay with keyboard shortcuts and game info.
+fn draw_help_overlay(f: &mut Frame, area: Rect) {
+    let width = 62u16.min(area.width.saturating_sub(4));
+    let height = 32u16.min(area.height.saturating_sub(2));
+    let x = area.x + (area.width.saturating_sub(width)) / 2;
+    let y = area.y + (area.height.saturating_sub(height)) / 2;
+    let overlay = Rect::new(x, y, width, height);
+
+    f.render_widget(Clear, overlay);
+
+    let block = Block::default()
+        .title(" Help ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+    let inner = block.inner(overlay);
+    f.render_widget(block, overlay);
+
+    let help_text = vec![
+        Line::from(Span::styled(
+            "Global",
+            Style::default().fg(Color::Yellow).bold(),
+        )),
+        Line::from("  q        Quit / back to menu"),
+        Line::from("  ?        Toggle this help"),
+        Line::from("  Tab      Toggle AI reasoning panel"),
+        Line::from("  Space    Pause / unpause AI turns"),
+        Line::from("  + / -    Speed up / slow down AI play"),
+        Line::from("  j / k    Scroll game log"),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Your Turn (action bar)",
+            Style::default().fg(Color::Yellow).bold(),
+        )),
+        Line::from("  e        End Turn"),
+        Line::from("  s        Build Settlement"),
+        Line::from("  r        Build Road"),
+        Line::from("  c        Upgrade to City"),
+        Line::from("  d        Buy Development Card"),
+        Line::from("  p        Play Development Card"),
+        Line::from("  t        Open Trade Builder"),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Placement (board cursor)",
+            Style::default().fg(Color::Yellow).bold(),
+        )),
+        Line::from("  Arrows   Move between legal positions"),
+        Line::from("  n / p    Next / previous position"),
+        Line::from("  Enter    Confirm placement"),
+        Line::from("  Esc      Cancel"),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Resources (trade, discard, dev cards)",
+            Style::default().fg(Color::Yellow).bold(),
+        )),
+        Line::from("  w b s h o   Wood Brick Sheep Harvest Ore"),
+        Line::from("  Tab         Switch GIVE / GET (trade)"),
+        Line::from("  Backspace   Undo last resource"),
+        Line::from("  Enter       Confirm"),
+        Line::from(""),
+        Line::from(Span::styled(
+            "Trade Response",
+            Style::default().fg(Color::Yellow).bold(),
+        )),
+        Line::from("  y / Enter   Accept"),
+        Line::from("  n / Esc     Reject"),
+    ];
+
+    let para = Paragraph::new(help_text).wrap(Wrap { trim: false });
+    f.render_widget(para, inner);
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────

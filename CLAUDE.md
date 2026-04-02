@@ -71,6 +71,25 @@ The binary boots into a TUI (title screen -> main menu -> game setup). LLM mode 
 - Unit tests go in-module (`#[cfg(test)]`); integration tests in `tests/`.
 - Tests must be deterministic. Use seeded RNG where randomness is needed.
 
+### TUI Test Framework
+
+The TUI has dedicated test infrastructure in `src/ui/` (`#[cfg(test)]` child modules):
+
+- **`testing.rs`** -- Helpers: `render_to_buffer()` renders any `Screen` to a ratatui `TestBackend`, `buffer_to_string()` converts to plain text, `make_test_playing_state()` creates a `PlayingState` with real channels so `send_response()` works (returns the receiver for assertions).
+- **`input_tests.rs`** -- Tests for `handle_input()` across all screens and input modes. Verifies state transitions, keyboard shortcuts, and that the correct `HumanResponse` is sent on the channel.
+- **`snapshot_tests.rs`** -- Insta snapshot tests rendering each screen/mode to a 120x40 buffer. Catches visual regressions.
+
+Key patterns:
+- `handle_input()` and `draw_screen()` are already pure functions on `App` state -- no refactoring needed to test them.
+- `make_test_playing_state(input_mode)` returns `(PlayingState, UnboundedReceiver<HumanResponse>)`. Set the input mode, call `handle_input`, then `rx.try_recv()` to assert what was sent.
+- Snapshot workflow: `cargo test` fails on visual changes, `cargo insta review` shows diffs, accept/reject interactively.
+
+```bash
+cargo test ui::input_tests              # Input handling tests (55 tests)
+cargo test ui::snapshot_tests           # Visual snapshot tests (15 tests)
+cargo insta review                      # Review snapshot diffs after UI changes
+```
+
 ## Commits & PRs
 
 - Branch names: `feature/...`, `fix/...`, `docs/...`, `refactor/...`.
