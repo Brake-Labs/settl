@@ -31,3 +31,4 @@ Thumbs.db
 *.dll
 *.so
 *.dylib
+debug.log
