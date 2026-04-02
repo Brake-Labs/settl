@@ -3,6 +3,8 @@
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 
+use ratatui_image::picker::Picker;
+
 use crate::game::board::Resource;
 
 use super::board_view;
@@ -113,6 +115,92 @@ pub fn draw_playing(f: &mut Frame, ps: &PlayingState) {
     draw_status_bar(f, ps, main_chunks[2]);
 
     // Help overlay (drawn last so it sits on top).
+    if ps.show_help {
+        draw_help_overlay(f, size);
+    }
+}
+
+/// Draw the playing screen with pixel-rendered board.
+///
+/// Uses `BoardImageRenderer` for the board panel, keeping all other
+/// panels as text-based ratatui widgets.
+pub fn draw_playing_mut(f: &mut Frame, ps: &mut PlayingState, picker: &Picker) {
+    let size = f.area();
+
+    let main_chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Min(15),
+            Constraint::Length(5),
+            Constraint::Length(1),
+        ])
+        .split(size);
+
+    let right_panel_width = if ps.show_ai_panel { 38 } else { 30 };
+    let top_chunks = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Min(107), Constraint::Length(right_panel_width)])
+        .split(main_chunks[0]);
+
+    let right_split = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(20), Constraint::Min(5)])
+        .split(top_chunks[1]);
+
+    // Render board using pixel image renderer.
+    if let Some(state) = &ps.state.clone() {
+        if let Some(ref mut renderer) = ps.board_image_renderer {
+            renderer.render(f, state, picker, top_chunks[0], &ps.input_mode);
+        } else if let Some(ref grid) = ps.hex_grid {
+            // Fallback to text renderer during init.
+            board_view::render_board(state, grid, top_chunks[0], f.buffer_mut(), &ps.input_mode);
+        } else {
+            let waiting = Paragraph::new("Computing board layout...")
+                .block(
+                    Block::default()
+                        .title(" Board ")
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(Color::Cyan)),
+                )
+                .alignment(Alignment::Center);
+            f.render_widget(waiting, top_chunks[0]);
+        }
+
+        if ps.show_ai_panel {
+            chat_panel::render_chat(
+                &ps.chat_messages,
+                ps.chat_scroll,
+                top_chunks[1],
+                f.buffer_mut(),
+            );
+        } else {
+            resource_bar::render_players(state, &ps.player_names, right_split[0], f.buffer_mut());
+            game_log::render_log(&ps.messages, u16::MAX, right_split[1], f.buffer_mut());
+        }
+    } else {
+        let waiting = Paragraph::new("Waiting for game to start...")
+            .block(
+                Block::default()
+                    .title(" Board ")
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Cyan)),
+            )
+            .alignment(Alignment::Center);
+        f.render_widget(waiting, top_chunks[0]);
+
+        let no_players = Paragraph::new("").block(
+            Block::default()
+                .title(" Players ")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        );
+        f.render_widget(no_players, right_split[0]);
+        game_log::render_log(&ps.messages, u16::MAX, right_split[1], f.buffer_mut());
+    }
+
+    draw_context_bar(f, ps, main_chunks[1]);
+    draw_status_bar(f, ps, main_chunks[2]);
+
     if ps.show_help {
         draw_help_overlay(f, size);
     }

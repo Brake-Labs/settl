@@ -86,6 +86,7 @@ pub fn make_test_app(screen: Screen) -> App {
     App {
         screen,
         personalities: vec![],
+        picker: ratatui_image::picker::Picker::halfblocks(),
     }
 }
 

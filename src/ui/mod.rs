@@ -1,3 +1,4 @@
+pub mod board_image;
 pub mod board_view;
 pub mod chat_panel;
 pub mod game_log;
@@ -25,6 +26,7 @@ use crossterm::terminal::{
 };
 use crossterm::ExecutableCommand;
 use ratatui::prelude::*;
+use ratatui_image::picker::{Picker, ProtocolType};
 use tokio::sync::mpsc;
 
 use crate::game::board::Board;
@@ -178,6 +180,8 @@ pub struct PlayingState {
     pub human_response_tx: Option<mpsc::UnboundedSender<HumanResponse>>,
     /// Cached hex grid for board rendering (computed once on first state).
     pub hex_grid: Option<board_view::HexGrid>,
+    /// Pixel board renderer (initialized when picker is available).
+    pub board_image_renderer: Option<board_image::BoardImageRenderer>,
 }
 
 impl PlayingState {
@@ -212,6 +216,7 @@ impl PlayingState {
             human_prompt_rx: None,
             human_response_tx: None,
             hex_grid: None,
+            board_image_renderer: None,
         }
     }
 
@@ -422,10 +427,11 @@ impl PlayingState {
     }
 }
 
-/// Top-level app — just holds the current screen and shared config.
+/// Top-level app -- holds the current screen, shared config, and graphics picker.
 pub struct App {
     pub screen: Screen,
     pub personalities: Vec<Personality>,
+    pub picker: Picker,
 }
 
 // ── Main Entry Point ───────────────────────────────────────────────────
@@ -434,6 +440,39 @@ pub struct App {
 pub async fn run_app() -> io::Result<()> {
     // Discover personalities from ./personalities/*.toml.
     let personalities = discover_personalities();
+
+    // Detect terminal graphics protocol BEFORE entering raw mode.
+    // The picker does its own raw mode toggling internally, so we must
+    // call it before crossterm takes over stdin.
+    let picker = match Picker::from_query_stdio() {
+        Ok(p) => {
+            let proto = p.protocol_type();
+            let font = p.font_size();
+            // Write diagnostics for debugging.
+            let _ = std::fs::write(
+                "/tmp/settl_proto.txt",
+                format!("protocol: {:?}\nfont_size: {:?}\n", proto, font),
+            );
+            if proto == ProtocolType::Halfblocks {
+                eprintln!(
+                    "settl requires a terminal with graphics support (Sixel, Kitty, or iTerm2)."
+                );
+                eprintln!();
+                eprintln!("Supported terminals: Ghostty, Kitty, iTerm2, WezTerm, foot, Windows Terminal, VS Code.");
+                eprintln!("For tmux, add to ~/.tmux.conf: set -g allow-passthrough on");
+                std::process::exit(1);
+            }
+            p
+        }
+        Err(e) => {
+            eprintln!("settl requires a terminal with graphics support (Sixel, Kitty, or iTerm2).");
+            eprintln!();
+            eprintln!("Error: {:?}", e);
+            eprintln!("Supported terminals: Ghostty, Kitty, iTerm2, WezTerm, foot, Windows Terminal, VS Code.");
+            eprintln!("For tmux, add to ~/.tmux.conf: set -g allow-passthrough on");
+            std::process::exit(1);
+        }
+    };
 
     // Setup terminal.
     enable_raw_mode()?;
@@ -452,6 +491,7 @@ pub async fn run_app() -> io::Result<()> {
     let mut app = App {
         screen: Screen::Title { frame: 0 },
         personalities,
+        picker,
     };
 
     let result = run_event_loop(&mut terminal, &mut app).await;
@@ -470,7 +510,7 @@ async fn run_event_loop(
 ) -> io::Result<()> {
     loop {
         // Draw.
-        terminal.draw(|f| draw_screen(f, &app.screen))?;
+        terminal.draw(|f| draw_screen_mut(f, app))?;
 
         // Poll timeout depends on screen type.
         let timeout = match &app.screen {
@@ -537,6 +577,11 @@ async fn run_event_loop(
                 }
             }
 
+            // Initialize board image renderer once state is available.
+            if ps.board_image_renderer.is_none() && ps.state.is_some() {
+                ps.board_image_renderer = Some(board_image::BoardImageRenderer::new(&app.picker));
+            }
+
             // Check for incoming human prompts.
             if matches!(ps.input_mode, InputMode::Spectating) {
                 if let Some(ref mut prompt_rx) = ps.human_prompt_rx {
@@ -559,6 +604,13 @@ fn draw_screen(f: &mut Frame, screen: &Screen) {
         Screen::FilePicker(state) => screens::draw_file_picker(f, state),
         Screen::Playing(ps) => layout::draw_playing(f, ps),
         Screen::PostGame(state) => screens::draw_post_game(f, state),
+    }
+}
+
+fn draw_screen_mut(f: &mut Frame, app: &mut App) {
+    match &mut app.screen {
+        Screen::Playing(ps) => layout::draw_playing_mut(f, ps, &app.picker),
+        other => draw_screen(f, other),
     }
 }
 
