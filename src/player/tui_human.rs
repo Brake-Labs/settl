@@ -62,6 +62,13 @@ pub enum HumanResponse {
 // ── Channel ──────────────────────────────────────────────────────────
 
 /// Shared channel endpoints for TUI↔engine human input.
+///
+/// NOTE: All human players share this single channel pair. The game engine
+/// calls players sequentially, so responses are matched by ordering. This
+/// means only ONE human player per game is safe. Multiple human players
+/// would cause misrouted responses when the engine calls `respond_to_trade`
+/// on several players concurrently. If multi-human is needed in the future,
+/// switch to per-player channels.
 pub struct HumanInputChannel {
     pub prompt_tx: mpsc::UnboundedSender<HumanPrompt>,
     pub response_rx: Mutex<mpsc::UnboundedReceiver<HumanResponse>>,
@@ -80,9 +87,23 @@ impl TuiHumanPlayer {
 
     /// Send a typed prompt to the TUI and wait for the response.
     async fn send_prompt(&self, player_id: PlayerId, kind: PromptKind) -> HumanResponse {
-        let _ = self.channel.prompt_tx.send(HumanPrompt { player_id, kind });
+        if self
+            .channel
+            .prompt_tx
+            .send(HumanPrompt { player_id, kind })
+            .is_err()
+        {
+            eprintln!("[TuiHumanPlayer] prompt channel closed, defaulting to Index(0)");
+            return HumanResponse::Index(0);
+        }
         let mut rx = self.channel.response_rx.lock().await;
-        rx.recv().await.unwrap_or(HumanResponse::Index(0))
+        match rx.recv().await {
+            Some(resp) => resp,
+            None => {
+                eprintln!("[TuiHumanPlayer] response channel closed, defaulting to Index(0)");
+                HumanResponse::Index(0)
+            }
+        }
     }
 
     /// Send a prompt and extract the index, clamped to max.

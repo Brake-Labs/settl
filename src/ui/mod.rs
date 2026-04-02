@@ -119,11 +119,9 @@ pub enum InputMode {
         player_id: usize,
     },
     /// Discarding cards with resource keys.
-    #[allow(dead_code)]
     Discard {
         selected: Vec<Resource>,
         count: usize,
-        available: [u32; 5],
         remaining: [u32; 5],
     },
     /// Picking a single resource with w/b/s/h/o keys.
@@ -203,6 +201,17 @@ impl PlayingState {
         }
     }
 
+    /// Push a message to the game log, capping at MAX_MESSAGES to prevent
+    /// unbounded growth. Auto-scrolls to the latest message.
+    fn push_message(&mut self, msg: String) {
+        const MAX_MESSAGES: usize = 2000;
+        self.messages.push(msg);
+        if self.messages.len() > MAX_MESSAGES {
+            self.messages.drain(..self.messages.len() - MAX_MESSAGES);
+        }
+        self.log_scroll = self.messages.len().saturating_sub(1) as u16;
+    }
+
     /// Convert an incoming HumanPrompt into the appropriate InputMode.
     fn apply_prompt(&mut self, prompt: player::tui_human::HumanPrompt) {
         self.input_mode = match prompt.kind {
@@ -250,7 +259,6 @@ impl PlayingState {
             PromptKind::Discard { count, available } => InputMode::Discard {
                 selected: Vec::new(),
                 count,
-                available,
                 remaining: available,
             },
             PromptKind::ChooseResource { context } => InputMode::ResourcePicker { context },
@@ -354,9 +362,7 @@ impl PlayingState {
                 }
                 self.state = Some(state);
                 if !message.is_empty() {
-                    self.messages.push(message);
-                    let total = self.messages.len() as u16;
-                    self.log_scroll = total.saturating_sub(1);
+                    self.push_message(message);
                 }
             }
             UiEvent::AiReasoning {
@@ -369,8 +375,13 @@ impl PlayingState {
                     player_id,
                     text: reasoning,
                 });
-                let total = self.chat_messages.len() as u16;
-                self.chat_scroll = total.saturating_sub(1);
+                // Cap chat messages to prevent unbounded growth.
+                const MAX_CHAT: usize = 500;
+                if self.chat_messages.len() > MAX_CHAT {
+                    self.chat_messages
+                        .drain(..self.chat_messages.len() - MAX_CHAT);
+                }
+                self.chat_scroll = self.chat_messages.len().saturating_sub(1) as u16;
             }
             UiEvent::GameOver { winner, message } => {
                 let winner_name = self
@@ -378,15 +389,13 @@ impl PlayingState {
                     .get(winner)
                     .cloned()
                     .unwrap_or_else(|| "?".into());
-                self.messages.push(format!(
+                self.push_message(format!(
                     "GAME OVER: Player {} ({}) wins!",
                     winner, winner_name,
                 ));
-                self.messages.push(message.clone());
+                self.push_message(message.clone());
                 self.game_over = true;
                 self.game_over_winner = Some((winner, winner_name));
-                let total = self.messages.len() as u16;
-                self.log_scroll = total.saturating_sub(1);
             }
         }
     }
@@ -670,7 +679,7 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
         },
 
         Screen::Playing(ps) => {
-            // Global keys (always active).
+            // Global keys (always active regardless of mode).
             match key {
                 KeyCode::Char('q') => {
                     if matches!(ps.input_mode, InputMode::Spectating) {
@@ -682,7 +691,9 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                         }
                     }
                 }
-                KeyCode::Tab => {
+                // Tab toggles AI panel ONLY when not in TradeBuilder (where Tab
+                // switches give/get sides).
+                KeyCode::Tab if !matches!(ps.input_mode, InputMode::TradeBuilder { .. }) => {
                     ps.show_ai_panel = !ps.show_ai_panel;
                     return Action::None;
                 }
@@ -841,15 +852,12 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                                 *selected = selected.checked_sub(1).unwrap_or(len - 1);
                             }
                         }
-                        KeyCode::Enter => {
-                            let idx = *selected;
-                            ps.send_response(HumanResponse::Index(idx));
-                            ps.input_mode = InputMode::Spectating;
-                        }
-                        KeyCode::Esc => {
-                            // For board cursor there's no cancel -- send index 0 as fallback
-                            ps.send_response(HumanResponse::Index(0));
-                            ps.input_mode = InputMode::Spectating;
+                        KeyCode::Enter | KeyCode::Esc => {
+                            if len > 0 {
+                                let idx = *selected;
+                                ps.send_response(HumanResponse::Index(idx));
+                                ps.input_mode = InputMode::Spectating;
+                            }
                         }
                         _ => {}
                     }
@@ -986,29 +994,42 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                                 ps.input_mode = InputMode::Spectating;
                             }
                         }
+                        KeyCode::Esc => {
+                            // Auto-complete: fill remaining discards with first available resources.
+                            while sel_resources.len() < *count {
+                                let mut filled = false;
+                                for i in 0..5 {
+                                    if remaining[i] > 0 {
+                                        remaining[i] -= 1;
+                                        sel_resources.push(resources[i]);
+                                        filled = true;
+                                        break;
+                                    }
+                                }
+                                if !filled {
+                                    break;
+                                }
+                            }
+                            let result = sel_resources.clone();
+                            ps.send_response(HumanResponse::Resources(result));
+                            ps.input_mode = InputMode::Spectating;
+                        }
                         _ => {}
                     }
                     Action::None
                 }
 
                 InputMode::ResourcePicker { .. } => {
-                    let resources = [
-                        Resource::Wood,
-                        Resource::Brick,
-                        Resource::Sheep,
-                        Resource::Wheat,
-                        Resource::Ore,
-                    ];
                     let idx = match key {
                         KeyCode::Char('w') => Some(0usize),
                         KeyCode::Char('b') => Some(1),
                         KeyCode::Char('s') => Some(2),
                         KeyCode::Char('h') => Some(3),
                         KeyCode::Char('o') => Some(4),
+                        KeyCode::Esc => Some(0), // Default to Wood on Esc
                         _ => None,
                     };
                     if let Some(i) = idx {
-                        let _ = resources; // resource validation if needed
                         ps.send_response(HumanResponse::Index(i));
                         ps.input_mode = InputMode::Spectating;
                     }
@@ -1026,20 +1047,20 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                             }
                         }
                         KeyCode::Char(c) if c.is_ascii_digit() => {
+                            // Match player by 1-indexed number: key '1' = player 0, etc.
                             let num = c.to_digit(10).unwrap_or(0) as usize;
-                            // Player numbers are 1-indexed in the UI
-                            if let Some(idx) = targets
-                                .iter()
-                                .position(|(id, _)| *id == num || *id == num.wrapping_sub(1))
-                            {
+                            let player_id = num.saturating_sub(1);
+                            if let Some(idx) = targets.iter().position(|(id, _)| *id == player_id) {
                                 ps.send_response(HumanResponse::Index(idx));
                                 ps.input_mode = InputMode::Spectating;
                             }
                         }
-                        KeyCode::Enter => {
-                            let idx = *selected;
-                            ps.send_response(HumanResponse::Index(idx));
-                            ps.input_mode = InputMode::Spectating;
+                        KeyCode::Enter | KeyCode::Esc => {
+                            if !targets.is_empty() {
+                                let idx = *selected;
+                                ps.send_response(HumanResponse::Index(idx));
+                                ps.input_mode = InputMode::Spectating;
+                            }
                         }
                         _ => {}
                     }

@@ -112,10 +112,17 @@ fn draw_context_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
 
     match &ps.input_mode {
         InputMode::Spectating => {
-            // Show last few game log messages.
+            // Show game log messages, respecting scroll position.
             let n = inner.height as usize;
-            let start = ps.messages.len().saturating_sub(n);
-            let recent: Vec<Line> = ps.messages[start..]
+            let total = ps.messages.len();
+            // log_scroll is the bottom-most visible line index.
+            // Clamp it so it doesn't go past the end.
+            let max_scroll = total.saturating_sub(1);
+            let scroll_pos = (ps.log_scroll as usize).min(max_scroll);
+            // Show n lines ending at scroll_pos.
+            let end = scroll_pos + 1;
+            let start = end.saturating_sub(n);
+            let recent: Vec<Line> = ps.messages[start..end.min(total)]
                 .iter()
                 .map(|m| {
                     let color = game_log::message_color(m);
@@ -225,7 +232,6 @@ fn draw_context_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
             remaining,
             ..
         } => {
-            let res_names = ["Wood", "Brick", "Sheep", "Wheat", "Ore"];
             let sel_str = format_resource_list(sel);
             let lines = vec![
                 Line::from(vec![
@@ -243,11 +249,10 @@ fn draw_context_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
                     Style::default().fg(Color::DarkGray),
                 )),
                 Line::from(Span::styled(
-                    " [w/b/s/h/o] add  [Backspace] undo  [Enter] confirm",
+                    " [w/b/s/h/o] add  [Backspace] undo  [Esc] auto-fill  [Enter] confirm",
                     Style::default().fg(Color::DarkGray),
                 )),
             ];
-            let _ = res_names;
             let para = Paragraph::new(lines);
             f.render_widget(para, inner);
         }

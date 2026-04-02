@@ -445,6 +445,9 @@ fn draw_cursor_overlay(
 
 /// Safe cell setter: only writes if within the given area.
 fn set_cell(col: i16, row: i16, ch: char, style: Style, area: Rect, buf: &mut Buffer) {
+    if col < 0 || row < 0 {
+        return;
+    }
     let col = col as u16;
     let row = row as u16;
     if col >= area.x && col < area.x + area.width && row >= area.y && row < area.y + area.height {
