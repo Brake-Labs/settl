@@ -28,12 +28,11 @@ use ratatui::prelude::*;
 use tokio::sync::mpsc;
 
 use crate::game::board::Board;
+use crate::game::event::GameEvent;
 use crate::game::orchestrator::GameOrchestrator;
 use crate::game::state::GameState;
 use crate::player;
 use crate::player::personality::Personality;
-use crate::replay::event::GameEvent;
-use crate::replay::save::SaveGame;
 
 use screens::*;
 
@@ -83,7 +82,6 @@ pub enum Screen {
     MainMenu(MainMenuState),
     NewGame(NewGameState),
     LlamafileSetup(LlamafileSetupState),
-    FilePicker(FilePickerState),
     Playing(PlayingState),
     PostGame(PostGameState),
 }
@@ -532,24 +530,6 @@ async fn run_event_loop(
                                 }
                             }
                         }
-                        Action::LoadFile => {
-                            if let Screen::FilePicker(ref fp) = app.screen {
-                                if let Some(path) = fp.files.get(fp.selected) {
-                                    match fp.purpose {
-                                        FilePickerPurpose::Resume => {
-                                            if let Some(screen) = launch_resume(path) {
-                                                app.screen = screen;
-                                            }
-                                        }
-                                        FilePickerPurpose::Replay => {
-                                            if let Some(screen) = launch_replay(path) {
-                                                app.screen = screen;
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
                     }
                 }
             }
@@ -614,7 +594,6 @@ fn draw_screen(f: &mut Frame, screen: &Screen) {
         Screen::MainMenu(state) => screens::draw_main_menu(f, state),
         Screen::NewGame(state) => screens::draw_new_game(f, state),
         Screen::LlamafileSetup(state) => screens::draw_llamafile_setup(f, state),
-        Screen::FilePicker(state) => screens::draw_file_picker(f, state),
         Screen::Playing(ps) => layout::draw_playing(f, ps),
         Screen::PostGame(state) => screens::draw_post_game(f, state),
     }
@@ -628,7 +607,6 @@ enum Action {
     Quit,
     Transition(Screen),
     StartGame,
-    LoadFile,
 }
 
 fn handle_input(app: &mut App, key: KeyCode) -> Action {
@@ -655,12 +633,6 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                         "New Game" => Action::Transition(Screen::NewGame(NewGameState::new(
                             &app.personalities,
                         ))),
-                        "Continue Game" => Action::Transition(Screen::FilePicker(
-                            FilePickerState::new(FilePickerPurpose::Resume),
-                        )),
-                        "Replay Game" => Action::Transition(Screen::FilePicker(
-                            FilePickerState::new(FilePickerPurpose::Replay),
-                        )),
                         "Quit" => Action::Quit,
                         _ => Action::None,
                     }
@@ -745,31 +717,6 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                     Action::Transition(Screen::NewGame(setup.saved_config))
                 } else {
                     Action::Transition(Screen::NewGame(NewGameState::new(&app.personalities)))
-                }
-            }
-            _ => Action::None,
-        },
-
-        Screen::FilePicker(state) => match key {
-            KeyCode::Esc => Action::Transition(Screen::MainMenu(MainMenuState::new())),
-            KeyCode::Up | KeyCode::Char('k') => {
-                state.selected = state
-                    .selected
-                    .checked_sub(1)
-                    .unwrap_or(state.files.len().saturating_sub(1));
-                Action::None
-            }
-            KeyCode::Down | KeyCode::Char('j') => {
-                if !state.files.is_empty() {
-                    state.selected = (state.selected + 1) % state.files.len();
-                }
-                Action::None
-            }
-            KeyCode::Enter => {
-                if !state.files.is_empty() {
-                    Action::LoadFile
-                } else {
-                    Action::None
                 }
             }
             _ => Action::None,
@@ -1484,33 +1431,7 @@ fn launch_game(
         let mut orchestrator = GameOrchestrator::new(state, players);
         orchestrator.ui_tx = Some(tx);
 
-        let result = orchestrator.run().await;
-
-        // Save game log and replay.
-        let _ = orchestrator
-            .log
-            .write_jsonl(std::path::Path::new("game_log.jsonl"));
-        if let Ok(json) = serde_json::to_string_pretty(&orchestrator.replay) {
-            let _ = std::fs::write("game_replay.json", json);
-        }
-
-        // Save game state on error for resume.
-        if result.is_err() {
-            let model_ids: Vec<String> = orchestrator
-                .player_names
-                .iter()
-                .map(|_| String::new()) // Can't recover model IDs here easily
-                .collect();
-            let save = SaveGame::new(
-                orchestrator.state.clone(),
-                &orchestrator.log,
-                orchestrator.player_names.clone(),
-                model_ids,
-            );
-            let _ = save.save_to_file(std::path::Path::new("game_save.json"));
-        }
-
-        result
+        orchestrator.run().await
     });
 
     let mut ps = PlayingState::new(rx, player_names, has_human);
@@ -1519,121 +1440,6 @@ fn launch_game(
         ps.human_response_tx = Some(response_tx);
     }
     Screen::Playing(ps)
-}
-
-fn launch_resume(path: &std::path::Path) -> Option<Screen> {
-    let save = SaveGame::load_from_file(path).ok()?;
-    let player_names = save.player_names.clone();
-
-    let players: Vec<Box<dyn player::Player>> = save
-        .player_names
-        .iter()
-        .enumerate()
-        .map(|(i, name)| {
-            let model = save.player_models.get(i).filter(|m| !m.is_empty()).cloned();
-            if let Some(model_id) = model {
-                Box::new(player::llm::LlmPlayer::new(
-                    name.clone(),
-                    model_id,
-                    Personality::default(),
-                )) as Box<dyn player::Player>
-            } else {
-                Box::new(player::random::RandomPlayer::new(name.clone())) as Box<dyn player::Player>
-            }
-        })
-        .collect();
-
-    let log = save.recent_log();
-    let (tx, rx) = mpsc::unbounded_channel();
-
-    tokio::spawn(async move {
-        let mut orchestrator = GameOrchestrator::new(save.state, players);
-        orchestrator.log = log;
-        orchestrator.ui_tx = Some(tx);
-
-        let result = orchestrator.run().await;
-
-        let _ = orchestrator
-            .log
-            .write_jsonl(std::path::Path::new("game_log.jsonl"));
-        if let Ok(json) = serde_json::to_string_pretty(&orchestrator.replay) {
-            let _ = std::fs::write("game_replay.json", json);
-        }
-
-        result
-    });
-
-    Some(Screen::Playing(PlayingState::new(rx, player_names, false)))
-}
-
-fn launch_replay(path: &std::path::Path) -> Option<Screen> {
-    use crate::replay::recorder::GameReplay;
-
-    let contents = std::fs::read_to_string(path).ok()?;
-
-    // Try structured replay first.
-    if let Ok(replay) = serde_json::from_str::<GameReplay>(&contents) {
-        let player_names = replay.player_names.clone();
-        let (tx, rx) = mpsc::unbounded_channel();
-
-        tokio::spawn(async move {
-            // Feed replay frames as synthetic UiEvents.
-            for frame in &replay.frames {
-                let vp_str: String = frame
-                    .victory_points
-                    .iter()
-                    .enumerate()
-                    .map(|(p, v)| format!("P{}:{}", p, v))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                let message = format!("[T{}] {} [{}]", frame.turn, frame.description, vp_str);
-
-                let _ = tx.send(UiEvent::StateUpdate {
-                    state: Arc::new(GameState::new(Board::default_board(), replay.num_players)),
-                    event: None,
-                    message,
-                });
-
-                tokio::time::sleep(Duration::from_millis(50)).await;
-            }
-
-            // Send game over.
-            if let Some(winner) = replay.winner {
-                let _ = tx.send(UiEvent::GameOver {
-                    winner,
-                    message: replay.stats().to_string(),
-                });
-            }
-        });
-
-        return Some(Screen::Playing(PlayingState::new(rx, player_names, false)));
-    }
-
-    // Fall back to JSONL event log — simpler playback.
-    if let Ok(log) = crate::replay::event::GameLog::read_jsonl(path) {
-        let (tx, rx) = mpsc::unbounded_channel();
-        let player_names = vec![
-            "Player 0".into(),
-            "Player 1".into(),
-            "Player 2".into(),
-            "Player 3".into(),
-        ];
-
-        tokio::spawn(async move {
-            for event in log.events() {
-                let _ = tx.send(UiEvent::StateUpdate {
-                    state: Arc::new(GameState::new(Board::default_board(), 4)),
-                    event: None,
-                    message: format!("{:?}", event),
-                });
-                tokio::time::sleep(Duration::from_millis(50)).await;
-            }
-        });
-
-        return Some(Screen::Playing(PlayingState::new(rx, player_names, false)));
-    }
-
-    None
 }
 
 fn build_post_game(ps: &PlayingState) -> PostGameState {
