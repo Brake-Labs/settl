@@ -451,6 +451,9 @@ pub async fn run_app() -> io::Result<()> {
     // Detect terminal graphics protocol BEFORE entering raw mode.
     // The picker does its own raw mode toggling internally, so we must
     // call it before crossterm takes over stdin.
+    log::info!("TERM={:?}", std::env::var("TERM").ok());
+    log::info!("TERM_PROGRAM={:?}", std::env::var("TERM_PROGRAM").ok());
+    log::info!("TMUX={:?}", std::env::var("TMUX").ok());
     let picker = match Picker::from_query_stdio() {
         Ok(p) => {
             let proto = p.protocol_type();

@@ -174,7 +174,6 @@ pub struct BoardImageRenderer {
     protocol: Option<StatefulProtocol>,
     base_image: Option<RgbaImage>,
     board_fingerprint: u64,
-    cursor_fingerprint: u64,
     last_area: (u16, u16),
     pixel_grid: PixelHexGrid,
     font: FontRef<'static>,
@@ -196,7 +195,6 @@ impl BoardImageRenderer {
             protocol: Some(protocol),
             base_image: None,
             board_fingerprint: 0,
-            cursor_fingerprint: 0,
             last_area: (0, 0),
             pixel_grid: PixelHexGrid::new(),
             font,
@@ -216,7 +214,6 @@ impl BoardImageRenderer {
             protocol: None,
             base_image: None,
             board_fingerprint: 0,
-            cursor_fingerprint: 0,
             last_area: (0, 0),
             pixel_grid: PixelHexGrid::new(),
             font,
@@ -236,7 +233,7 @@ impl BoardImageRenderer {
             return;
         }
 
-        // Check cache: regenerate base image if board state changed.
+        // Check cache: regenerate base image only if board state changed.
         let board_fp = compute_fingerprint(state);
         let board_changed = board_fp != self.board_fingerprint || self.base_image.is_none();
         if board_changed {
@@ -245,42 +242,112 @@ impl BoardImageRenderer {
             self.board_fingerprint = board_fp;
         }
 
-        // Check if cursor state changed.
-        let cursor_fp = cursor_fingerprint(input_mode);
-        let cursor_changed = cursor_fp != self.cursor_fingerprint;
-
         // Check if area size changed (terminal resize).
         let area_key = (area.width, area.height);
         let area_changed = area_key != self.last_area;
 
-        // Only rebuild the protocol when something actually changed.
-        let needs_rebuild =
-            board_changed || cursor_changed || area_changed || self.protocol.is_none();
-
-        if needs_rebuild {
-            self.cursor_fingerprint = cursor_fp;
+        // Only rebuild the protocol when the board image or area changed.
+        // Cursor overlay is rendered as terminal cells, never re-encodes the image.
+        if board_changed || area_changed || self.protocol.is_none() {
             self.last_area = area_key;
-
-            // Composite cursor overlay if in BoardCursor mode.
-            let final_image = if matches!(input_mode, InputMode::BoardCursor { .. }) {
-                let mut img = self.base_image.as_ref().unwrap().clone();
-                self.draw_cursor_overlay(&mut img, input_mode);
-                img
-            } else {
-                self.base_image.as_ref().unwrap().clone()
-            };
-
-            let protocol = picker.new_resize_protocol(DynamicImage::ImageRgba8(final_image));
+            let img = self.base_image.as_ref().unwrap().clone();
+            let protocol = picker.new_resize_protocol(DynamicImage::ImageRgba8(img));
             self.protocol = Some(protocol);
-            log::debug!("board image protocol rebuilt (board={board_changed}, cursor={cursor_changed}, area={area_changed})");
+            log::debug!(
+                "board image protocol rebuilt (board={board_changed}, area={area_changed})"
+            );
         }
 
+        // Render the board image.
         if let Some(ref mut proto) = self.protocol {
             let widget = StatefulImage::default().resize(Resize::Scale(None));
             f.render_stateful_widget(widget, area, proto);
-            // Log any encoding errors for debugging.
             if let Some(Err(e)) = proto.last_encoding_result() {
                 log::error!("ratatui-image encoding error: {:?}", e);
+            }
+        }
+
+        // Render cursor overlay as terminal cells (instant, no image re-encoding).
+        self.render_cursor_cells(f, area, input_mode);
+    }
+
+    /// Map a pixel coordinate in the board image to a terminal cell position.
+    fn pixel_to_cell(&self, px: f64, py: f64, area: Rect) -> (u16, u16) {
+        let col = area.x + (px * area.width as f64 / IMG_WIDTH as f64) as u16;
+        let row = area.y + (py * area.height as f64 / IMG_HEIGHT as f64) as u16;
+        (
+            col.min(area.right().saturating_sub(1)),
+            row.min(area.bottom().saturating_sub(1)),
+        )
+    }
+
+    /// Render cursor markers as colored terminal cells on top of the image.
+    fn render_cursor_cells(&self, f: &mut Frame, area: Rect, input_mode: &InputMode) {
+        let InputMode::BoardCursor {
+            kind,
+            legal_vertices,
+            legal_edges,
+            legal_hexes,
+            selected,
+            ..
+        } = input_mode
+        else {
+            return;
+        };
+
+        let legal_style = Style::default().fg(Color::Yellow);
+        let cursor_style = Style::default().fg(Color::Black).bg(Color::Yellow).bold();
+
+        match kind {
+            CursorKind::Settlement => {
+                for (i, v) in legal_vertices.iter().enumerate() {
+                    if let Some(&(px, py)) = self.pixel_grid.vertex_pos.get(v) {
+                        let (col, row) = self.pixel_to_cell(px, py, area);
+                        let style = if i == *selected {
+                            cursor_style
+                        } else {
+                            legal_style
+                        };
+                        let ch = if i == *selected {
+                            "\u{25c6}"
+                        } else {
+                            "\u{25cb}"
+                        };
+                        f.buffer_mut().set_string(col, row, ch, style);
+                    }
+                }
+            }
+            CursorKind::Road => {
+                for (i, e) in legal_edges.iter().enumerate() {
+                    if let Some(&(mx, my)) = self.pixel_grid.edge_midpoints.get(e) {
+                        let (col, row) = self.pixel_to_cell(mx, my, area);
+                        let style = if i == *selected {
+                            cursor_style
+                        } else {
+                            legal_style
+                        };
+                        let ch = if i == *selected {
+                            "\u{2501}"
+                        } else {
+                            "\u{2500}"
+                        };
+                        f.buffer_mut().set_string(col, row, ch, style);
+                    }
+                }
+            }
+            CursorKind::Robber => {
+                for (i, h) in legal_hexes.iter().enumerate() {
+                    if let Some(&(px, py)) = self.pixel_grid.hex_centers.get(h) {
+                        let (col, row) = self.pixel_to_cell(px, py, area);
+                        let style = if i == *selected {
+                            cursor_style
+                        } else {
+                            legal_style
+                        };
+                        let ch = if i == *selected { "R" } else { "\u{25cb}" };
+                        f.buffer_mut().set_string(col, row, ch, style);
+                    }
+                }
             }
         }
     }
@@ -489,104 +556,6 @@ impl BoardImageRenderer {
 
         img
     }
-
-    fn draw_cursor_overlay(&self, img: &mut RgbaImage, input_mode: &InputMode) {
-        if let InputMode::BoardCursor {
-            kind,
-            legal_vertices,
-            legal_edges,
-            legal_hexes,
-            selected,
-            ..
-        } = input_mode
-        {
-            let legal_color = Rgba([255, 255, 0, 200]);
-            let cursor_color = Rgba([255, 255, 0, 255]);
-
-            match kind {
-                CursorKind::Settlement => {
-                    for (i, v) in legal_vertices.iter().enumerate() {
-                        if let Some(&(vx, vy)) = self.pixel_grid.vertex_pos.get(v) {
-                            if i == *selected {
-                                draw_filled_circle_mut(
-                                    img,
-                                    (vx as i32, vy as i32),
-                                    12,
-                                    cursor_color,
-                                );
-                                // Inner diamond.
-                                let diamond = [
-                                    Point::new(vx as i32, vy as i32 - 8),
-                                    Point::new(vx as i32 + 8, vy as i32),
-                                    Point::new(vx as i32, vy as i32 + 8),
-                                    Point::new(vx as i32 - 8, vy as i32),
-                                ];
-                                draw_polygon_mut(img, &diamond, Rgba([40, 40, 40, 255]));
-                            } else {
-                                draw_circle_outline(img, vx as i32, vy as i32, 8, legal_color);
-                            }
-                        }
-                    }
-                }
-                CursorKind::Road => {
-                    for (i, e) in legal_edges.iter().enumerate() {
-                        if let Some(((x1, y1), (x2, y2))) = edge_vertex_pixels(&self.pixel_grid, *e)
-                        {
-                            let color = if i == *selected {
-                                cursor_color
-                            } else {
-                                legal_color
-                            };
-                            let thickness = if i == *selected { 7 } else { 4 };
-                            draw_thick_line(
-                                img,
-                                (x1 as f32, y1 as f32),
-                                (x2 as f32, y2 as f32),
-                                color,
-                                thickness,
-                            );
-                        }
-                    }
-                }
-                CursorKind::Robber => {
-                    for (i, h) in legal_hexes.iter().enumerate() {
-                        if let Some(&(cx, cy)) = self.pixel_grid.hex_centers.get(h) {
-                            if i == *selected {
-                                draw_filled_circle_mut(
-                                    img,
-                                    (cx as i32, cy as i32),
-                                    20,
-                                    cursor_color,
-                                );
-                                let r_scale = PxScale::from(24.0);
-                                draw_text_mut(
-                                    img,
-                                    Rgba([40, 40, 40, 255]),
-                                    (cx - 7.0) as i32,
-                                    (cy - 11.0) as i32,
-                                    r_scale,
-                                    &self.font_bold,
-                                    "R",
-                                );
-                            } else {
-                                draw_circle_outline(img, cx as i32, cy as i32, 16, legal_color);
-                                let r_scale = PxScale::from(20.0);
-                                draw_text_mut(
-                                    img,
-                                    legal_color,
-                                    (cx - 6.0) as i32,
-                                    (cy - 9.0) as i32,
-                                    r_scale,
-                                    &self.font_bold,
-                                    "R",
-                                );
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -598,23 +567,6 @@ fn compute_fingerprint(state: &GameState) -> u64 {
     fp = fp.wrapping_add(state.robber_hex.q as u64 * 100 + state.robber_hex.r as u64);
     fp = fp.wrapping_add(state.turn_number as u64 * 17);
     fp
-}
-
-fn cursor_fingerprint(input_mode: &InputMode) -> u64 {
-    match input_mode {
-        InputMode::BoardCursor {
-            selected,
-            positions,
-            ..
-        } => {
-            // Hash selected index and number of positions.
-            let mut fp = *selected as u64 * 1000007;
-            fp = fp.wrapping_add(positions.len() as u64 * 31);
-            fp
-        }
-        // All non-cursor modes hash to the same value.
-        _ => 0,
-    }
 }
 
 /// Get the two vertex pixel positions for an edge (the endpoints of the road).
