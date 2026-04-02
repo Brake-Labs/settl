@@ -29,7 +29,6 @@ ab_glyph = "0.2"
 
 [dev-dependencies]
 proptest = "1"
-tempfile = "3"
 insta = "1"
 cargo-husky = { version = "1", default-features = false, features = ["precommit-hook", "run-cargo-fmt", "run-cargo-clippy"] }
 
