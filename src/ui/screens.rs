@@ -47,6 +47,10 @@ impl Default for MainMenuState {
 }
 
 impl MainMenuState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     pub fn menu_items(&self) -> Vec<&'static str> {
         let mut items = vec!["New Game"];
         if self.has_save_files {
