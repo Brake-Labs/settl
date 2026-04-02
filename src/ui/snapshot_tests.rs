@@ -8,8 +8,8 @@ use super::screens::*;
 use super::testing::*;
 use super::*;
 
-const WIDTH: u16 = 120;
-const HEIGHT: u16 = 40;
+const WIDTH: u16 = 170;
+const HEIGHT: u16 = 65;
 
 // ── Non-game screens ─────────────────────────────────────────────────
 

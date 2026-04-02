@@ -21,8 +21,8 @@
 | Element | Character | Notes |
 |---------|-----------|-------|
 | Empty vertex | `·` (U+00B7) | Middle dot, dim gray |
-| Settlement | `▲` (U+25B2) | Colored per player |
-| City | `■` (U+25A0) | Colored per player, larger presence |
+| Settlement | 5w x 2h block | Player-colored background, white ▲ on top row |
+| City | 5w x 3h block | Player-colored background, white ■ centered |
 | Robber | `R` | Black on red background, unmissable |
 | Port | `*` | On coastal vertex pairs |
 | Cursor | reverse video | Highlighted legal position during placement |
@@ -30,11 +30,10 @@
 ### Board Structure
 | Element | Characters | Notes |
 |---------|------------|-------|
-| Hex top/bottom edge | `───` | Horizontal, between vertices |
-| Hex diagonal edge | `╱` `╲` | Angled sides |
-| Road (horizontal) | `═══` or colored `───` | Player-colored |
-| Road (diagonal) | colored `╱` or `╲` | Player-colored, bold |
-| Hex interior | `Wo6` `Bk8` etc. | Terrain abbrev + number token |
+| Hex boundary | colored fill only | No border characters, terrain color defines shape |
+| Road (diagonal) | colored block | Player-colored background, 3 cells diagonal |
+| Road (vertical) | colored block | Player-colored background, 5 cells tall |
+| Hex interior | Terrain + number + dots | Each on dedicated row (see template) |
 | Hot numbers (6, 8) | bold + bright white | High probability, must stand out |
 
 ### Terrain Abbreviations
@@ -80,7 +79,7 @@ Display below the number token inside each hex to show roll probability:
 | P2 | Green | `Color::LightGreen` |
 | P3 | Magenta | `Color::LightMagenta` |
 
-Use `Light` variants for buildings/roads (better visibility on dark backgrounds). Use standard variants for text labels.
+Code uses `Light` variants for buildings/roads via `PLAYER_COLORS` constant. Standard variants for text labels in player panel.
 
 ### Resource Colors (in player panel and trade UI)
 | Resource | Color | Label |
@@ -123,15 +122,15 @@ Use `Light` variants for buildings/roads (better visibility on dark backgrounds)
 ```
 
 ### Layout Constraints (ratatui)
-- **Board panel:** `Constraint::Min(50)` width, `Constraint::Min(20)` height
+- **Board panel:** `Constraint::Min(107)` width, `Constraint::Min(20)` height
 - **Player panel:** `Constraint::Length(22)` width
 - **Context bar:** `Constraint::Length(5)` height
 - **Status bar:** `Constraint::Length(1)` height
 
 ### Minimum Terminal Size
-- **Width:** 80 columns (warn if smaller)
-- **Height:** 30 rows (warn if smaller)
-- **Recommended:** 120x40 for comfortable play
+- **Width:** 130 columns (warn if smaller)
+- **Height:** 60 rows (warn if smaller)
+- **Recommended:** 170x65 for comfortable play
 
 ### Context Bar Modes
 The bottom panel is context-sensitive -- it shows different content based on game state:
@@ -149,20 +148,24 @@ The bottom panel is context-sensitive -- it shows different content based on gam
 
 ### Hex Grid Geometry
 Pointy-top hexes, interlocking. Each hex cell:
-- **Width:** ~12 characters between left and right vertices (HEX_COL_Q=12)
-- **Height:** 7 lines (top vertex to bottom vertex, VERT_OFF=3)
-- **Row spacing:** 5 lines between hex centers (HEX_ROW=5)
+- **Width:** ~20 characters between left and right vertices (HEX_COL_Q=20)
+- **Height:** 11 lines (top vertex to bottom vertex, VERT_OFF=5)
+- **Row spacing:** 9 lines between hex centers (HEX_ROW=9)
 - **Overlap with neighbors:** Shared vertices and edges
 
 ### Hex Cell Template
 ```
-        ·               <- cy-3: N vertex
-      ╱   ╲             <- cy-2: upper diagonals
-    ╱  Wo  6 ╲          <- cy-1: wider diags + terrain + number
-   · ·······   ·        <- cy:   side vertices + probability dots
-    ╲         ╱         <- cy+1: lower diagonals
-      ╲     ╱           <- cy+2: closing diagonals
-        ·               <- cy+3: S vertex
+              ·               <- cy-5: N vertex
+            ╱   ╲             <- cy-4: upper diagonals
+          ╱       ╲           <- cy-3: wider diagonals
+        ╱           ╲         <- cy-2: even wider
+      ╱   Wo          ╲      <- cy-1: TERRAIN label (dedicated row)
+     ·       6          ·     <- cy:   NUMBER token (dedicated row)
+      ╲    ·····      ╱      <- cy+1: PROBABILITY DOTS (dedicated row)
+        ╲           ╱         <- cy+2: lower diagonals
+          ╲       ╱           <- cy+3: narrower diagonals
+            ╲   ╱             <- cy+4: closing diagonals
+              ·               <- cy+5: S vertex
 ```
 
 ### Full Board Layout (3-4-5-4-3)
@@ -426,3 +429,8 @@ Two keys. Fast response keeps the game moving.
 | 2026-04-01 | Resource-key trade builder over grid UI | 6 keystrokes for a trade vs. 10+ with arrow navigation; typing is faster than navigating |
 | 2026-04-01 | Player targeting with number keys (1-4) | Direct targeting without menus; works in trade + robber steal contexts |
 | 2026-04-01 | y/n for trade responses | Two-key response keeps game moving; no navigating Accept/Reject menu |
+| 2026-04-02 | Scale hex from 12x7 to 16x9 | Cramped hexes made terrain, numbers, and dots compete for space; each now gets a dedicated row |
+| 2026-04-02 | 3-char buildings: /▲\ and [■] | Single-char buildings blended into hex grid; multi-cell pieces are unmissable |
+| 2026-04-02 | Full-length diagonal roads | Short ═══ segments didn't read as "roads"; full-edge ╱╲ lines match the hex structure |
+| 2026-04-02 | Terrain-tinted hex edges | Uniform DarkGray edges felt flat; darkened terrain colors give organic board-game warmth |
+| 2026-04-02 | Light* player colors for pieces | Standard color variants too dim on dark terminals; Light variants per DESIGN.md spec |

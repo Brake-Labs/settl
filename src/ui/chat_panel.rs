@@ -4,7 +4,7 @@
 //! containing reasoning text. Visually distinct from the game log which shows
 //! mechanical game events.
 
-use super::PLAYER_COLORS;
+use super::PLAYER_TEXT_COLORS;
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 
@@ -24,7 +24,7 @@ pub fn render_chat(messages: &[ChatMessage], scroll: u16, area: Rect, buf: &mut 
     let mut lines: Vec<Line> = Vec::new();
 
     for msg in messages {
-        let color = PLAYER_COLORS
+        let color = PLAYER_TEXT_COLORS
             .get(msg.player_id)
             .copied()
             .unwrap_or(Color::White);
