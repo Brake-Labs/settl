@@ -182,12 +182,28 @@ impl NewGameState {
         .chain(personalities.iter().map(|p| p.name.clone()))
         .collect();
 
+        let username = std::env::var("USER")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| "Player".into());
+
         let players = (0..4)
-            .map(|i| PlayerConfig {
-                name: DEFAULT_NAMES[i].into(),
-                kind: PlayerKind::Random,
-                model_index: 0,
-                personality_index: 0,
+            .map(|i| {
+                if i == 0 {
+                    PlayerConfig {
+                        name: username.clone(),
+                        kind: PlayerKind::Human,
+                        model_index: 0,
+                        personality_index: 0,
+                    }
+                } else {
+                    PlayerConfig {
+                        name: DEFAULT_NAMES[i].into(),
+                        kind: PlayerKind::Random,
+                        model_index: 0,
+                        personality_index: 0,
+                    }
+                }
             })
             .collect();
 
@@ -296,12 +312,9 @@ pub fn draw_title(f: &mut Frame, frame_count: u64) {
     let total_height = art_lines + 4; // art + gap + subtitle + gap + prompt
     let y_start = area.y + area.height.saturating_sub(total_height) / 2;
 
-    // Title art.
-    let art_area = Rect::new(area.x, y_start, area.width, art_lines);
-    let art = Paragraph::new(TITLE_ART.trim_start_matches('\n'))
-        .alignment(Alignment::Center)
-        .style(Style::default().fg(Color::Yellow).bold());
-    f.render_widget(art, art_area);
+    // Title art -- center the block as a whole (not per-line) so that
+    // lines of different widths stay aligned with each other.
+    render_title_art(f, area, y_start, art_lines);
 
     // Subtitle.
     let sub_y = y_start + art_lines + 1;
@@ -339,11 +352,7 @@ pub fn draw_main_menu(f: &mut Frame, state: &MainMenuState) {
     let total_height = art_lines + 3 + menu_height + 2; // art + gaps + menu + hint
     let y_start = area.y + area.height.saturating_sub(total_height) / 2;
 
-    let art_area = Rect::new(area.x, y_start, area.width, art_lines);
-    let art = Paragraph::new(TITLE_ART.trim_start_matches('\n'))
-        .alignment(Alignment::Center)
-        .style(Style::default().fg(Color::Yellow).bold());
-    f.render_widget(art, art_area);
+    render_title_art(f, area, y_start, art_lines);
 
     // Menu.
     let menu_y = y_start + art_lines + 2;
@@ -661,6 +670,31 @@ pub fn draw_post_game(f: &mut Frame, state: &PostGameState) {
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────
+
+/// Render the title ASCII art centered as a block (not per-line).
+///
+/// `Paragraph` with `Alignment::Center` centers each line independently,
+/// which misaligns lines of different widths. This helper computes the
+/// centering offset from the widest line and left-aligns within that rect.
+fn render_title_art(f: &mut Frame, area: Rect, y_start: u16, art_lines: u16) {
+    let art_text = TITLE_ART.trim_start_matches('\n');
+    let max_width = art_text
+        .lines()
+        .map(|l| l.chars().count())
+        .max()
+        .unwrap_or(0) as u16;
+    let x_offset = area.width.saturating_sub(max_width) / 2;
+    let art_area = Rect::new(
+        area.x + x_offset,
+        y_start,
+        max_width.min(area.width.saturating_sub(x_offset)),
+        art_lines,
+    );
+    let art = Paragraph::new(art_text)
+        .alignment(Alignment::Left)
+        .style(Style::default().fg(Color::Yellow).bold());
+    f.render_widget(art, art_area);
+}
 
 fn cell_style(focused: bool) -> Style {
     if focused {

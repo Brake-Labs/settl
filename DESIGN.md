@@ -34,17 +34,18 @@
 | Hex diagonal edge | `╱` `╲` | Angled sides |
 | Road (horizontal) | `═══` or colored `───` | Player-colored |
 | Road (diagonal) | colored `╱` or `╲` | Player-colored, bold |
-| Hex interior | `Fo6` `Hi8` etc. | Terrain abbrev + number token |
+| Hex interior | `Wo6` `Bk8` etc. | Terrain abbrev + number token |
 | Hot numbers (6, 8) | bold + bright white | High probability, must stand out |
 
 ### Terrain Abbreviations
+Resource-based abbreviations (what the terrain produces, not terrain name):
 | Terrain | Abbrev | Produces |
 |---------|--------|----------|
-| Forest | `Fo` | Wood |
-| Hills | `Hi` | Brick |
-| Pasture | `Pa` | Sheep |
-| Fields | `Fi` | Wheat |
-| Mountains | `Mo` | Ore |
+| Forest | `Wo` | Wood |
+| Hills | `Bk` | Brick |
+| Pasture | `Sh` | Sheep |
+| Fields | `Wh` | Wheat |
+| Mountains | `Or` | Ore |
 | Desert | `De` | Nothing |
 
 ### Number Probability Dots
@@ -62,9 +63,9 @@ Display below the number token inside each hex to show roll probability:
 ### Terrain Colors (background fill inside hex)
 | Terrain | Color | Ratatui Value |
 |---------|-------|---------------|
-| Forest | Dark green | `Color::Rgb(34, 100, 34)` |
+| Forest | Dark green | `Color::Rgb(34, 120, 34)` |
 | Hills | Warm red-brown | `Color::Rgb(178, 102, 51)` |
-| Pasture | Light green | `Color::Rgb(100, 180, 100)` |
+| Pasture | Bright green | `Color::Rgb(80, 180, 60)` |
 | Fields | Golden yellow | `Color::Rgb(200, 170, 50)` |
 | Mountains | Cool gray | `Color::Rgb(140, 140, 150)` |
 | Desert | Sandy tan | `Color::Rgb(180, 160, 120)` |
@@ -148,17 +149,20 @@ The bottom panel is context-sensitive -- it shows different content based on gam
 
 ### Hex Grid Geometry
 Pointy-top hexes, interlocking. Each hex cell:
-- **Width:** ~9 characters between left and right vertices
-- **Height:** 5 lines (top vertex to bottom vertex)
+- **Width:** ~12 characters between left and right vertices (HEX_COL_Q=12)
+- **Height:** 7 lines (top vertex to bottom vertex, VERT_OFF=3)
+- **Row spacing:** 5 lines between hex centers (HEX_ROW=5)
 - **Overlap with neighbors:** Shared vertices and edges
 
 ### Hex Cell Template
 ```
-   ·───·       <- top vertex pair + top edge
-  ╱ Fo6 ╲      <- diagonal edges + terrain + number
- ·  ···  ·     <- side vertices + probability dots
-  ╲     ╱      <- diagonal edges
-   ·───·       <- bottom vertex pair + bottom edge
+        ·               <- cy-3: N vertex
+      ╱   ╲             <- cy-2: upper diagonals
+    ╱  Wo  6 ╲          <- cy-1: wider diags + terrain + number
+   · ·······   ·        <- cy:   side vertices + probability dots
+    ╲         ╱         <- cy+1: lower diagonals
+      ╲     ╱           <- cy+2: closing diagonals
+        ·               <- cy+3: S vertex
 ```
 
 ### Full Board Layout (3-4-5-4-3)

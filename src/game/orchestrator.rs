@@ -117,6 +117,9 @@ impl GameOrchestrator {
 
     /// Run the full game and return the winner's PlayerId.
     pub async fn run(&mut self) -> Result<PlayerId, OrchestratorError> {
+        // Send initial state so the TUI can render the board before any prompts arrive.
+        self.send_ui("Game starting...".into(), None);
+
         // Skip setup if the game is already past the setup phase (e.g. resumed).
         if matches!(self.state.phase, GamePhase::Setup { .. }) {
             self.run_setup().await?;

@@ -6,6 +6,15 @@ pub mod menu;
 pub mod resource_bar;
 pub mod screens;
 
+#[cfg(test)]
+mod flow_tests;
+#[cfg(test)]
+mod input_tests;
+#[cfg(test)]
+mod snapshot_tests;
+#[cfg(test)]
+mod testing;
+
 use std::io;
 use std::sync::Arc;
 use std::time::Duration;
@@ -151,6 +160,8 @@ pub struct PlayingState {
     pub paused: bool,
     /// Whether to show AI reasoning panel (Tab toggle).
     pub show_ai_panel: bool,
+    /// Whether to show the help overlay (? toggle).
+    pub show_help: bool,
     /// Current input mode (replaces pending_prompt).
     pub input_mode: InputMode,
     /// Channel to receive human prompts from the engine.
@@ -188,6 +199,7 @@ impl PlayingState {
             speed_ms: 100,
             paused: false,
             show_ai_panel: false,
+            show_help: false,
             input_mode: InputMode::Spectating,
             human_prompt_rx: None,
             human_response_tx: None,
@@ -681,8 +693,18 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
         },
 
         Screen::Playing(ps) => {
+            // Help overlay intercepts all input when visible.
+            if ps.show_help {
+                ps.show_help = false;
+                return Action::None;
+            }
+
             // Global keys (always active regardless of mode).
             match key {
+                KeyCode::Char('?') => {
+                    ps.show_help = true;
+                    return Action::None;
+                }
                 KeyCode::Char('q') => {
                     if matches!(ps.input_mode, InputMode::Spectating) {
                         if ps.game_over {

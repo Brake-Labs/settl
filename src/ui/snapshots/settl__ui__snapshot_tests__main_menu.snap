@@ -1,0 +1,31 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&buf)
+---
+
+
+
+
+
+
+
+
+
+
+
+
+                                       ███████╗███████╗████████╗████████╗██╗
+                                       ██╔════╝██╔════╝╚══██╔══╝╚══██╔══╝██║
+                                       ███████╗█████╗     ██║      ██║   ██║
+                                       ╚════██║██╔══╝     ██║      ██║   ██║
+                                       ███████║███████╗   ██║      ██║   ███████╗
+                                       ╚══════╝╚══════╝   ╚═╝      ╚═╝   ╚══════╝
+
+
+
+                                                   > New Game
+                                                     Continue Game
+                                                     Replay Game
+                                                     Quit
+
+                                         [↑↓] navigate  [Enter] select  [q] quit

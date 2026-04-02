@@ -182,11 +182,11 @@ impl Terrain {
     /// Two-character abbreviation for display in ASCII and TUI boards.
     pub fn abbr(self) -> &'static str {
         match self {
-            Terrain::Forest => "Fo",
-            Terrain::Hills => "Hi",
-            Terrain::Pasture => "Pa",
-            Terrain::Fields => "Fi",
-            Terrain::Mountains => "Mo",
+            Terrain::Forest => "Wo",
+            Terrain::Hills => "Bk",
+            Terrain::Pasture => "Sh",
+            Terrain::Fields => "Wh",
+            Terrain::Mountains => "Or",
             Terrain::Desert => "De",
         }
     }
@@ -1084,11 +1084,11 @@ mod tests {
 
     #[test]
     fn terrain_abbr_covers_all_variants() {
-        assert_eq!(Terrain::Forest.abbr(), "Fo");
-        assert_eq!(Terrain::Hills.abbr(), "Hi");
-        assert_eq!(Terrain::Pasture.abbr(), "Pa");
-        assert_eq!(Terrain::Fields.abbr(), "Fi");
-        assert_eq!(Terrain::Mountains.abbr(), "Mo");
+        assert_eq!(Terrain::Forest.abbr(), "Wo");
+        assert_eq!(Terrain::Hills.abbr(), "Bk");
+        assert_eq!(Terrain::Pasture.abbr(), "Sh");
+        assert_eq!(Terrain::Fields.abbr(), "Wh");
+        assert_eq!(Terrain::Mountains.abbr(), "Or");
         assert_eq!(Terrain::Desert.abbr(), "De");
     }
 }
