@@ -15,9 +15,9 @@ expression: buffer_to_string(&buf)
 
                                                      ────────────────────────────────────────────────────────────────
                                                        Seed: [random]
-                                                       Max Turns: [500]
 
                                                        [ Start Game ]
+
 
 
 

@@ -82,17 +82,19 @@ impl PlayerKind {
         }
     }
 
-    pub fn next(&self) -> Self {
+    /// Cycle to the next AI player kind (Human is excluded for AI slots).
+    pub fn next_ai(&self) -> Self {
         match self {
             PlayerKind::Random => PlayerKind::Llm,
-            PlayerKind::Llm => PlayerKind::Human,
+            PlayerKind::Llm => PlayerKind::Random,
             PlayerKind::Human => PlayerKind::Random,
         }
     }
 
-    pub fn prev(&self) -> Self {
+    /// Cycle to the previous AI player kind (Human is excluded for AI slots).
+    pub fn prev_ai(&self) -> Self {
         match self {
-            PlayerKind::Random => PlayerKind::Human,
+            PlayerKind::Random => PlayerKind::Llm,
             PlayerKind::Llm => PlayerKind::Random,
             PlayerKind::Human => PlayerKind::Llm,
         }
@@ -151,8 +153,8 @@ impl NewGameCol {
 pub enum NewGameFocus {
     /// Player table row + column.
     Player { row: usize, col: NewGameCol },
-    /// Settings: 0 = seed, 1 = max_turns.
-    Setting(usize),
+    /// Seed setting.
+    Seed,
     /// The "Start Game" button.
     StartButton,
 }
@@ -161,7 +163,6 @@ pub enum NewGameFocus {
 pub struct NewGameState {
     pub players: Vec<PlayerConfig>,
     pub seed_input: String,
-    pub max_turns_input: String,
     pub focus: NewGameFocus,
     /// Personality names: built-ins + discovered from TOML.
     pub personality_names: Vec<String>,
@@ -210,7 +211,6 @@ impl NewGameState {
         Self {
             players,
             seed_input: String::new(),
-            max_turns_input: "500".into(),
             focus: NewGameFocus::Player {
                 row: 0,
                 col: NewGameCol::Kind,
@@ -250,10 +250,6 @@ impl NewGameState {
 
     pub fn seed(&self) -> Option<u64> {
         self.seed_input.parse().ok()
-    }
-
-    pub fn max_turns(&self) -> u32 {
-        self.max_turns_input.parse().unwrap_or(500)
     }
 }
 
@@ -498,7 +494,7 @@ pub fn draw_new_game(f: &mut Frame, state: &NewGameState) {
     f.render_widget(divider, divider_area);
 
     let seed_y = settings_y + 1;
-    let seed_focused = matches!(state.focus, NewGameFocus::Setting(0));
+    let seed_focused = matches!(state.focus, NewGameFocus::Seed);
     let seed_style = cell_style(seed_focused);
     let seed_display = if state.seed_input.is_empty() {
         "random"
@@ -512,18 +508,8 @@ pub fn draw_new_game(f: &mut Frame, state: &NewGameState) {
     let seed_area = Rect::new(x_start, seed_y, content_width, 1);
     Paragraph::new(seed_line).render(seed_area, f.buffer_mut());
 
-    let turns_y = seed_y + 1;
-    let turns_focused = matches!(state.focus, NewGameFocus::Setting(1));
-    let turns_style = cell_style(turns_focused);
-    let turns_line = Line::from(vec![
-        Span::styled("  Max Turns: ", Style::default().fg(Color::White)),
-        Span::styled(format!("[{}]", state.max_turns_input), turns_style),
-    ]);
-    let turns_area = Rect::new(x_start, turns_y, content_width, 1);
-    Paragraph::new(turns_line).render(turns_area, f.buffer_mut());
-
     // Start button.
-    let button_y = turns_y + 2;
+    let button_y = seed_y + 2;
     let button_focused = matches!(state.focus, NewGameFocus::StartButton);
     let button_style = if button_focused {
         Style::default().fg(Color::Black).bg(Color::Green).bold()

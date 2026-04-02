@@ -217,13 +217,11 @@ fn screen_navigation_new_game_configure_and_start() {
 
     // Navigate down to the start button.
     // Default focus is Player { row: 0, col: Kind }.
-    // Down x4 goes through player rows, then Settings, then StartButton.
+    // Down x4 goes through player rows, then Seed, then StartButton.
     for _ in 0..4 {
         handle_input(&mut app, KeyCode::Down);
     }
-    // Now at Setting(0) = seed.
-    handle_input(&mut app, KeyCode::Down);
-    // Now at Setting(1) = max_turns.
+    // Now at Seed.
     handle_input(&mut app, KeyCode::Down);
     // Now at StartButton.
 

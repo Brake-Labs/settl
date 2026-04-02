@@ -144,6 +144,48 @@ fn new_game_focus_navigation() {
     }
 }
 
+#[test]
+fn new_game_player_0_kind_locked_to_human() {
+    let mut app = new_game_app();
+    // Focus is on Player { row: 0, col: Kind }. Cycling should not change it.
+    handle_input(&mut app, KeyCode::Right); // cycle forward
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(
+            state.players[0].kind,
+            PlayerKind::Human,
+            "player 0 should always be Human"
+        );
+    }
+    handle_input(&mut app, KeyCode::Left); // cycle backward
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(
+            state.players[0].kind,
+            PlayerKind::Human,
+            "player 0 should always be Human"
+        );
+    }
+}
+
+#[test]
+fn new_game_ai_players_cannot_be_human() {
+    let mut app = new_game_app();
+    // Navigate to player 1's Kind column.
+    handle_input(&mut app, KeyCode::Down);
+    // Player 1 starts as Random. Cycle through all options.
+    handle_input(&mut app, KeyCode::Right); // Random -> Llm
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.players[1].kind, PlayerKind::Llm);
+    }
+    handle_input(&mut app, KeyCode::Right); // Llm -> Random (skips Human)
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(
+            state.players[1].kind,
+            PlayerKind::Random,
+            "should cycle back to Random, never Human"
+        );
+    }
+}
+
 // ── ActionBar ────────────────────────────────────────────────────────
 
 #[test]

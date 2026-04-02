@@ -660,7 +660,7 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                             state.editing = true;
                             Action::None
                         }
-                        NewGameFocus::Setting(_) => {
+                        NewGameFocus::Seed => {
                             state.editing = true;
                             Action::None
                         }
@@ -1199,11 +1199,8 @@ fn handle_new_game_editing(state: &mut NewGameState, key: KeyCode) -> Action {
                 } => {
                     state.players[row].name.pop();
                 }
-                NewGameFocus::Setting(0) => {
+                NewGameFocus::Seed => {
                     state.seed_input.pop();
-                }
-                NewGameFocus::Setting(1) => {
-                    state.max_turns_input.pop();
                 }
                 _ => {}
             }
@@ -1219,14 +1216,9 @@ fn handle_new_game_editing(state: &mut NewGameState, key: KeyCode) -> Action {
                         state.players[row].name.push(c);
                     }
                 }
-                NewGameFocus::Setting(0) => {
+                NewGameFocus::Seed => {
                     if c.is_ascii_digit() && state.seed_input.len() < 18 {
                         state.seed_input.push(c);
-                    }
-                }
-                NewGameFocus::Setting(1) => {
-                    if c.is_ascii_digit() && state.max_turns_input.len() < 5 {
-                        state.max_turns_input.push(c);
                     }
                 }
                 _ => {}
@@ -1246,13 +1238,11 @@ fn move_new_game_focus_up(state: &mut NewGameState) {
                 NewGameFocus::Player { row: 0, col }
             }
         }
-        NewGameFocus::Setting(0) => NewGameFocus::Player {
+        NewGameFocus::Seed => NewGameFocus::Player {
             row: state.num_players() - 1,
             col: NewGameCol::Kind,
         },
-        NewGameFocus::Setting(1) => NewGameFocus::Setting(0),
-        NewGameFocus::StartButton => NewGameFocus::Setting(1),
-        _ => state.focus,
+        NewGameFocus::StartButton => NewGameFocus::Seed,
     };
 }
 
@@ -1262,13 +1252,11 @@ fn move_new_game_focus_down(state: &mut NewGameState) {
             if row + 1 < state.num_players() {
                 NewGameFocus::Player { row: row + 1, col }
             } else {
-                NewGameFocus::Setting(0)
+                NewGameFocus::Seed
             }
         }
-        NewGameFocus::Setting(0) => NewGameFocus::Setting(1),
-        NewGameFocus::Setting(1) => NewGameFocus::StartButton,
+        NewGameFocus::Seed => NewGameFocus::StartButton,
         NewGameFocus::StartButton => NewGameFocus::StartButton,
-        _ => state.focus,
     };
 }
 
@@ -1295,11 +1283,14 @@ fn cycle_new_game_value(state: &mut NewGameState, forward: bool) {
         let player = &mut state.players[row];
         match col {
             NewGameCol::Kind => {
-                player.kind = if forward {
-                    player.kind.next()
-                } else {
-                    player.kind.prev()
-                };
+                // Player 0 is always Human; only AI slots (1+) can cycle.
+                if row > 0 {
+                    player.kind = if forward {
+                        player.kind.next_ai()
+                    } else {
+                        player.kind.prev_ai()
+                    };
+                }
             }
             NewGameCol::Model => {
                 if player.kind == PlayerKind::Llm {
@@ -1412,12 +1403,10 @@ fn launch_game(ng: &NewGameState, discovered_personalities: &[Personality]) -> S
 
     // Create channel.
     let (tx, rx) = mpsc::unbounded_channel();
-    let max_turns = ng.max_turns();
 
     // Spawn game engine.
     tokio::spawn(async move {
         let mut orchestrator = GameOrchestrator::new(state, players);
-        orchestrator.max_turns = max_turns;
         orchestrator.ui_tx = Some(tx);
 
         let result = orchestrator.run().await;
@@ -1485,7 +1474,6 @@ fn launch_resume(path: &std::path::Path) -> Option<Screen> {
     tokio::spawn(async move {
         let mut orchestrator = GameOrchestrator::new(save.state, players);
         orchestrator.log = log;
-        orchestrator.max_turns = 500;
         orchestrator.ui_tx = Some(tx);
 
         let result = orchestrator.run().await;

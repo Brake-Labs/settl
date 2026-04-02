@@ -26,10 +26,6 @@ pub struct HeadlessCli {
     #[arg(short, long, default_value = "claude-sonnet-4-6")]
     pub model: String,
 
-    /// Maximum turns before ending the game
-    #[arg(long, default_value = "500")]
-    pub max_turns: u32,
-
     /// Per-player models, comma-separated
     #[arg(long)]
     pub models: Option<String>,
@@ -64,7 +60,7 @@ pub async fn run(cli: HeadlessCli) {
 
     // Handle resume mode.
     if let Some(ref save_path) = cli.resume {
-        run_resume(save_path, &cli).await;
+        run_resume(save_path).await;
         return;
     }
 
@@ -151,7 +147,6 @@ pub async fn run(cli: HeadlessCli) {
     }
 
     let mut orchestrator = game::orchestrator::GameOrchestrator::new(state, players);
-    orchestrator.max_turns = cli.max_turns;
 
     match orchestrator.run().await {
         Ok(_winner) => {
@@ -257,7 +252,7 @@ fn run_replay(replay_path: &str) {
     }
 }
 
-async fn run_resume(save_path: &str, cli: &HeadlessCli) {
+async fn run_resume(save_path: &str) {
     let path = std::path::Path::new(save_path);
     match replay::save::SaveGame::load_from_file(path) {
         Ok(save) => {
@@ -291,7 +286,6 @@ async fn run_resume(save_path: &str, cli: &HeadlessCli) {
             let log = save.recent_log();
             let mut orchestrator = game::orchestrator::GameOrchestrator::new(save.state, players);
             orchestrator.log = log;
-            orchestrator.max_turns = cli.max_turns;
 
             match orchestrator.run().await {
                 Ok(winner) => {
