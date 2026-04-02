@@ -266,7 +266,7 @@ impl GameOrchestrator {
             .await;
 
         // Step 1: Roll dice.
-        let (d1, d2) = dice::roll_dice(&mut rand::thread_rng());
+        let (d1, d2) = dice::roll_dice(&mut rand::rng());
         let roll = d1 + d2;
 
         let dice_event = GameEvent::DiceRolled {

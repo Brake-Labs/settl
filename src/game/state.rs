@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use rand::seq::SliceRandom;
+use rand::seq::SliceRandom as _;
 use serde::{Deserialize, Serialize};
 
 use crate::game::actions::{DevCard, PlayerId};
@@ -200,7 +200,7 @@ impl GameState {
             dev_card_deck.push(DevCard::Monopoly);
         }
         {
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             dev_card_deck.shuffle(&mut rng);
         }
 

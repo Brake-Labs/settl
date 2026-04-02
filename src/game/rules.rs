@@ -896,8 +896,8 @@ pub fn steal_random_resource(state: &mut GameState, thief: PlayerId, victim: Pla
     }
 
     // Pick one at random.
-    use rand::seq::SliceRandom;
-    let mut rng = rand::thread_rng();
+    use rand::seq::IndexedRandom;
+    let mut rng = rand::rng();
     if let Some(&stolen) = pool.choose(&mut rng) {
         state.players[victim].remove_resource(stolen, 1);
         state.players[thief].add_resource(stolen, 1);

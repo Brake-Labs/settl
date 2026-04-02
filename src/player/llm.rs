@@ -315,7 +315,7 @@ impl Player for LlmPlayer {
             Err(_) => {
                 // Random fallback.
                 use rand::Rng;
-                let idx = rand::thread_rng().gen_range(0..choices.len());
+                let idx = rand::rng().random_range(0..choices.len());
                 (idx, "[AI was confused and acted randomly]".into())
             }
         }
@@ -338,7 +338,7 @@ impl Player for LlmPlayer {
             }
             Err(_) => {
                 use rand::Rng;
-                let idx = rand::thread_rng().gen_range(0..legal_vertices.len());
+                let idx = rand::rng().random_range(0..legal_vertices.len());
                 (idx, "[AI was confused and acted randomly]".into())
             }
         }
@@ -361,7 +361,7 @@ impl Player for LlmPlayer {
             }
             Err(_) => {
                 use rand::Rng;
-                let idx = rand::thread_rng().gen_range(0..legal_edges.len());
+                let idx = rand::rng().random_range(0..legal_edges.len());
                 (idx, "[AI was confused and acted randomly]".into())
             }
         }
@@ -390,7 +390,7 @@ impl Player for LlmPlayer {
             }
             Err(_) => {
                 use rand::Rng;
-                let idx = rand::thread_rng().gen_range(0..legal_hexes.len());
+                let idx = rand::rng().random_range(0..legal_hexes.len());
                 (idx, "[AI was confused and acted randomly]".into())
             }
         }
@@ -429,7 +429,7 @@ impl Player for LlmPlayer {
             }
             Err(_) => {
                 use rand::Rng;
-                let idx = rand::thread_rng().gen_range(0..targets.len());
+                let idx = rand::rng().random_range(0..targets.len());
                 (idx, "[AI was confused and acted randomly]".into())
             }
         }

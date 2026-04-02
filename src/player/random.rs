@@ -32,7 +32,7 @@ impl Player for RandomPlayer {
         _player_id: PlayerId,
         choices: &[PlayerChoice],
     ) -> (usize, String) {
-        let idx = rand::thread_rng().gen_range(0..choices.len());
+        let idx = rand::rng().random_range(0..choices.len());
         (idx, format!("[random] chose: {}", choices[idx]))
     }
 
@@ -42,7 +42,7 @@ impl Player for RandomPlayer {
         _player_id: PlayerId,
         legal_vertices: &[VertexCoord],
     ) -> (usize, String) {
-        let idx = rand::thread_rng().gen_range(0..legal_vertices.len());
+        let idx = rand::rng().random_range(0..legal_vertices.len());
         (idx, "[random settlement]".into())
     }
 
@@ -52,7 +52,7 @@ impl Player for RandomPlayer {
         _player_id: PlayerId,
         legal_edges: &[EdgeCoord],
     ) -> (usize, String) {
-        let idx = rand::thread_rng().gen_range(0..legal_edges.len());
+        let idx = rand::rng().random_range(0..legal_edges.len());
         (idx, "[random road]".into())
     }
 
@@ -62,7 +62,7 @@ impl Player for RandomPlayer {
         _player_id: PlayerId,
         legal_hexes: &[HexCoord],
     ) -> (usize, String) {
-        let idx = rand::thread_rng().gen_range(0..legal_hexes.len());
+        let idx = rand::rng().random_range(0..legal_hexes.len());
         (idx, "[random robber]".into())
     }
 
@@ -72,7 +72,7 @@ impl Player for RandomPlayer {
         _player_id: PlayerId,
         targets: &[PlayerId],
     ) -> (usize, String) {
-        let idx = rand::thread_rng().gen_range(0..targets.len());
+        let idx = rand::rng().random_range(0..targets.len());
         (idx, "[random steal]".into())
     }
 
@@ -93,7 +93,7 @@ impl Player for RandomPlayer {
         }
 
         use rand::seq::SliceRandom;
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         pool.shuffle(&mut rng);
         pool.truncate(count);
 
@@ -107,7 +107,7 @@ impl Player for RandomPlayer {
         _context: &str,
     ) -> (Resource, String) {
         let all = Resource::all();
-        let idx = rand::thread_rng().gen_range(0..all.len());
+        let idx = rand::rng().random_range(0..all.len());
         (all[idx], "[random resource]".into())
     }
 
@@ -134,9 +134,9 @@ impl Player for RandomPlayer {
         }
 
         use rand::Rng;
-        let mut rng = rand::thread_rng();
-        let give = have[rng.gen_range(0..have.len())];
-        let get = want[rng.gen_range(0..want.len())];
+        let mut rng = rand::rng();
+        let give = have[rng.random_range(0..have.len())];
+        let get = want[rng.random_range(0..want.len())];
 
         Some((
             TradeOffer {
