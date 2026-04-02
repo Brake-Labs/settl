@@ -173,6 +173,7 @@ pub fn llamafile_setup_app() -> App {
         },
         status_rx: rx,
         saved_config: NewGameState::new(&[]),
+        task_handle: None,
     };
     make_test_app(Screen::LlamafileSetup(setup))
 }

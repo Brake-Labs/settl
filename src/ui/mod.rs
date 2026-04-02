@@ -37,11 +37,11 @@ use crate::replay::save::SaveGame;
 
 use screens::*;
 
-/// Global handoff for the llamafile process from the spawned setup task
-/// back to the main event loop. The task puts the process here; the event
-/// loop takes it out.
-static LLAMAFILE_PROCESS: std::sync::Mutex<Option<Box<crate::llamafile::LlamafileProcess>>> =
-    std::sync::Mutex::new(None);
+/// Receiver for the llamafile process from the background setup task.
+/// Set when the setup screen is active; taken when setup completes.
+static LLAMAFILE_RESULT: std::sync::Mutex<
+    Option<tokio::sync::oneshot::Receiver<crate::llamafile::LlamafileProcess>>,
+> = std::sync::Mutex::new(None);
 
 /// Bright player colors for buildings and roads on the board.
 pub const PLAYER_COLORS: [Color; 4] = [
@@ -514,13 +514,14 @@ async fn run_event_loop(
                                     // Transition to LlamafileSetup to download + start.
                                     let (status_tx, status_rx) = mpsc::unbounded_channel();
                                     let saved_config = clone_new_game_state(ng);
+                                    let handle = spawn_llamafile_setup(status_tx);
                                     let setup_state = LlamafileSetupState {
                                         status: crate::llamafile::LlamafileStatus::Checking,
                                         status_rx,
                                         saved_config,
+                                        task_handle: Some(handle),
                                     };
                                     app.screen = Screen::LlamafileSetup(setup_state);
-                                    spawn_llamafile_setup(status_tx);
                                 } else if needs_llamafile {
                                     let port = app.llamafile_process.as_ref().unwrap().port;
                                     let screen = launch_game(ng, &app.personalities, Some(port));
@@ -567,10 +568,12 @@ async fn run_event_loop(
             // When ready, pick up the process and launch the game.
             if let crate::llamafile::LlamafileStatus::Ready(port) = &setup.status {
                 let port = *port;
-                // Take the process from the global handoff.
-                if let Ok(mut guard) = LLAMAFILE_PROCESS.lock() {
-                    if let Some(process) = guard.take() {
-                        app.llamafile_process = Some(*process);
+                // Take the process from the oneshot receiver.
+                if let Ok(mut guard) = LLAMAFILE_RESULT.lock() {
+                    if let Some(mut rx) = guard.take() {
+                        if let Ok(process) = rx.try_recv() {
+                            app.llamafile_process = Some(process);
+                        }
                     }
                 }
                 // Move saved_config out of the setup state.
@@ -728,11 +731,17 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
 
         Screen::LlamafileSetup(_) => match key {
             KeyCode::Esc => {
-                // Cancel setup, return to NewGame.
-                // If we can recover saved_config, do so; otherwise go to a fresh one.
-                if let Screen::LlamafileSetup(setup) =
+                // Cancel setup: abort the background task and return to NewGame.
+                if let Screen::LlamafileSetup(mut setup) =
                     std::mem::replace(&mut app.screen, Screen::Title { frame: 0 })
                 {
+                    if let Some(handle) = setup.task_handle.take() {
+                        handle.abort();
+                    }
+                    // Clear any pending oneshot receiver.
+                    if let Ok(mut guard) = LLAMAFILE_RESULT.lock() {
+                        guard.take();
+                    }
                     Action::Transition(Screen::NewGame(setup.saved_config))
                 } else {
                     Action::Transition(Screen::NewGame(NewGameState::new(&app.personalities)))
@@ -1654,7 +1663,17 @@ fn build_post_game(ps: &PlayingState) -> PostGameState {
 // ── Llamafile Helpers ──────────────────────────────────────────────────
 
 /// Spawn a background task that downloads (if needed) and starts the llamafile.
-fn spawn_llamafile_setup(status_tx: mpsc::UnboundedSender<crate::llamafile::LlamafileStatus>) {
+///
+/// Returns the `JoinHandle` so the caller can abort on cancel.
+/// The process is sent back via a oneshot channel stored in `LLAMAFILE_RESULT`.
+fn spawn_llamafile_setup(
+    status_tx: mpsc::UnboundedSender<crate::llamafile::LlamafileStatus>,
+) -> tokio::task::JoinHandle<()> {
+    let (process_tx, process_rx) = tokio::sync::oneshot::channel();
+    if let Ok(mut guard) = LLAMAFILE_RESULT.lock() {
+        *guard = Some(process_rx);
+    }
+
     tokio::spawn(async move {
         match crate::llamafile::ensure_llamafile(status_tx.clone()).await {
             Ok(path) => {
@@ -1663,18 +1682,10 @@ fn spawn_llamafile_setup(status_tx: mpsc::UnboundedSender<crate::llamafile::Llam
                 match crate::llamafile::LlamafileProcess::start_with_port_scan(&path).await {
                     Ok(process) => {
                         let port = process.port;
-                        match LLAMAFILE_PROCESS.lock() {
-                            Ok(mut guard) => {
-                                guard.replace(Box::new(process));
-                                let _ =
-                                    status_tx.send(crate::llamafile::LlamafileStatus::Ready(port));
-                            }
-                            Err(_) => {
-                                let _ = status_tx.send(crate::llamafile::LlamafileStatus::Error(
-                                    "Internal error: failed to store llamafile process".into(),
-                                ));
-                            }
+                        if process_tx.send(process).is_ok() {
+                            let _ = status_tx.send(crate::llamafile::LlamafileStatus::Ready(port));
                         }
+                        // If send fails, the receiver was dropped (user cancelled).
                     }
                     Err(e) => {
                         let _ = status_tx.send(crate::llamafile::LlamafileStatus::Error(e));
@@ -1685,7 +1696,7 @@ fn spawn_llamafile_setup(status_tx: mpsc::UnboundedSender<crate::llamafile::Llam
                 let _ = status_tx.send(crate::llamafile::LlamafileStatus::Error(e));
             }
         }
-    });
+    })
 }
 
 /// Clone a `NewGameState` for saving across screen transitions.

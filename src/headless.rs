@@ -102,7 +102,7 @@ pub async fn run(cli: HeadlessCli) {
         let name_list = ["Alice", "Bob", "Charlie", "Diana"];
         (0..cli.players)
             .map(|i| {
-                let personality = default_personalities[i].clone();
+                let personality = default_personalities[i % default_personalities.len()].clone();
                 Box::new(player::llm::LlmPlayer::with_client(
                     name_list[i].into(),
                     player::llm::LLAMAFILE_MODEL.into(),
@@ -143,9 +143,9 @@ pub async fn run(cli: HeadlessCli) {
                     .get(i)
                     .cloned()
                     .unwrap_or_else(|| cli.model.clone());
-                let personality = custom_personality
-                    .clone()
-                    .unwrap_or_else(|| default_personalities[i].clone());
+                let personality = custom_personality.clone().unwrap_or_else(|| {
+                    default_personalities[i % default_personalities.len()].clone()
+                });
                 Box::new(player::llm::LlmPlayer::new(
                     name_list[i].into(),
                     model,
@@ -396,10 +396,10 @@ async fn setup_llamafile_headless() -> u16 {
             }
             Some(LlamafileStatus::Ready(port)) => {
                 eprintln!(" ready on port {}!", port);
-                // Keep the process alive by leaking it. It will be killed when
-                // the main process exits.
+                // Intentionally leak the process so it stays alive for the
+                // duration of the program. The OS cleans it up on exit.
                 let process = handle.await.expect("llamafile setup task panicked");
-                std::mem::forget(process);
+                Box::leak(Box::new(process));
                 return port;
             }
             Some(LlamafileStatus::Error(e)) => {

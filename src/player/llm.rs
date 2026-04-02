@@ -28,6 +28,8 @@ pub struct LlmPlayer {
     max_retries: usize,
     /// Extra game context (recent history) injected by the orchestrator.
     extra_context: tokio::sync::Mutex<String>,
+    /// Use compact system prompt (for small local models).
+    compact_prompt: bool,
 }
 
 impl LlmPlayer {
@@ -39,10 +41,13 @@ impl LlmPlayer {
             personality,
             max_retries: 2,
             extra_context: tokio::sync::Mutex::new(String::new()),
+            compact_prompt: false,
         }
     }
 
     /// Create an LLM player backed by a pre-configured genai Client.
+    ///
+    /// Uses compact system prompts by default (suitable for small local models).
     pub fn with_client(
         name: String,
         model: String,
@@ -56,6 +61,17 @@ impl LlmPlayer {
             personality,
             max_retries: 2,
             extra_context: tokio::sync::Mutex::new(String::new()),
+            compact_prompt: true,
+        }
+    }
+
+    /// Build the system prompt, choosing compact or full based on model size.
+    fn system_prompt(&self) -> String {
+        let personality = self.personality.to_system_prompt();
+        if self.compact_prompt {
+            prompt::system_prompt_compact(&self.name, &personality)
+        } else {
+            prompt::system_prompt(&self.name, &personality)
         }
     }
 
@@ -346,7 +362,7 @@ impl Player for LlmPlayer {
         player_id: PlayerId,
         choices: &[PlayerChoice],
     ) -> (usize, String) {
-        let system = prompt::system_prompt(&self.name, &self.personality.to_system_prompt());
+        let system = self.system_prompt();
         let extra = self.extra_context.lock().await;
         let user = if extra.is_empty() {
             prompt::turn_prompt(state, player_id, choices)
@@ -385,7 +401,7 @@ impl Player for LlmPlayer {
         player_id: PlayerId,
         legal_vertices: &[VertexCoord],
     ) -> (usize, String) {
-        let system = prompt::system_prompt(&self.name, &self.personality.to_system_prompt());
+        let system = self.system_prompt();
         let user = prompt::setup_settlement_prompt(state, player_id, 1, legal_vertices);
         let tool = Self::index_tool(legal_vertices.len());
 
@@ -408,7 +424,7 @@ impl Player for LlmPlayer {
         player_id: PlayerId,
         legal_edges: &[EdgeCoord],
     ) -> (usize, String) {
-        let system = prompt::system_prompt(&self.name, &self.personality.to_system_prompt());
+        let system = self.system_prompt();
         let user = prompt::setup_road_prompt(state, player_id, legal_edges);
         let tool = Self::index_tool(legal_edges.len());
 
@@ -431,7 +447,7 @@ impl Player for LlmPlayer {
         player_id: PlayerId,
         legal_hexes: &[HexCoord],
     ) -> (usize, String) {
-        let system = prompt::system_prompt(&self.name, &self.personality.to_system_prompt());
+        let system = self.system_prompt();
         let state_json = prompt::game_state_json(state, player_id);
         let hex_list = prompt::format_hex_options(legal_hexes);
         let user = format!(
@@ -460,7 +476,7 @@ impl Player for LlmPlayer {
         _player_id: PlayerId,
         targets: &[PlayerId],
     ) -> (usize, String) {
-        let system = prompt::system_prompt(&self.name, &self.personality.to_system_prompt());
+        let system = self.system_prompt();
         let target_list: String = targets
             .iter()
             .enumerate()
@@ -499,7 +515,7 @@ impl Player for LlmPlayer {
         player_id: PlayerId,
         count: usize,
     ) -> (Vec<Resource>, String) {
-        let system = prompt::system_prompt(&self.name, &self.personality.to_system_prompt());
+        let system = self.system_prompt();
         let ps = &state.players[player_id];
         let hand: String = Resource::all()
             .iter()
@@ -545,7 +561,7 @@ impl Player for LlmPlayer {
         player_id: PlayerId,
         context: &str,
     ) -> (Resource, String) {
-        let system = prompt::system_prompt(&self.name, &self.personality.to_system_prompt());
+        let system = self.system_prompt();
         let state_json = prompt::game_state_json(state, player_id);
         let user = format!(
             "GAME STATE:\n{state_json}\n\n\
@@ -575,7 +591,7 @@ impl Player for LlmPlayer {
         state: &GameState,
         player_id: PlayerId,
     ) -> Option<(TradeOffer, String)> {
-        let system = prompt::system_prompt(&self.name, &self.personality.to_system_prompt());
+        let system = self.system_prompt();
         let state_json = prompt::game_state_json(state, player_id);
         let ps = &state.players[player_id];
         let hand: String = Resource::all()
@@ -641,7 +657,7 @@ impl Player for LlmPlayer {
         player_id: PlayerId,
         offer: &TradeOffer,
     ) -> (TradeResponse, String) {
-        let system = prompt::system_prompt(&self.name, &self.personality.to_system_prompt());
+        let system = self.system_prompt();
         let state_json = prompt::game_state_json(state, player_id);
         let offering: String = offer
             .offering

@@ -320,6 +320,8 @@ pub struct LlamafileSetupState {
     pub status_rx: tokio::sync::mpsc::UnboundedReceiver<crate::llamafile::LlamafileStatus>,
     /// Saved NewGame config so we can launch the game when ready.
     pub saved_config: NewGameState,
+    /// Handle to the background setup task so we can abort it on cancel.
+    pub task_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 // ── Drawing Functions ──────────────────────────────────────────────────

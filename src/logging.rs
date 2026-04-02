@@ -62,6 +62,13 @@ pub fn init() {
 
     if enabled {
         if let Some(path) = log_path() {
+            // Truncate if the log file exceeds 5 MB to prevent unbounded growth.
+            const MAX_LOG_SIZE: u64 = 5 * 1024 * 1024;
+            if let Ok(meta) = std::fs::metadata(&path) {
+                if meta.len() > MAX_LOG_SIZE {
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
             if let Ok(file) = OpenOptions::new().create(true).append(true).open(&path) {
                 if let Ok(mut guard) = LOG_FILE.lock() {
                     *guard = Some(file);
