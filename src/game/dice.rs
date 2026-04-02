@@ -8,7 +8,7 @@ use crate::game::state::{Building, GameState};
 
 /// Roll two six-sided dice, returning each die's value.
 pub fn roll_dice(rng: &mut impl Rng) -> (u8, u8) {
-    (rng.gen_range(1..=6), rng.gen_range(1..=6))
+    (rng.random_range(1..=6), rng.random_range(1..=6))
 }
 
 /// Calculate resource distribution for a given dice roll.

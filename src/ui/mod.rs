@@ -1333,7 +1333,7 @@ fn launch_game(ng: &NewGameState, discovered_personalities: &[Personality]) -> S
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
         Board::generate(&mut rng)
     } else {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         Board::generate(&mut rng)
     };
 

@@ -80,7 +80,7 @@ pub async fn run(cli: HeadlessCli) {
         let mut rng = rand::rngs::StdRng::seed_from_u64(seed);
         game::board::Board::generate(&mut rng)
     } else {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         game::board::Board::generate(&mut rng)
     };
 

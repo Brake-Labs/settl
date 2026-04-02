@@ -739,7 +739,7 @@ mod tests {
     use std::collections::HashSet;
 
     fn make_board() -> Board {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         Board::generate(&mut rng)
     }
 
