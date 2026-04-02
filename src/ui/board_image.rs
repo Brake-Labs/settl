@@ -290,8 +290,9 @@ impl BoardImageRenderer {
 
     /// Map a pixel coordinate in the board image to a terminal cell position.
     ///
-    /// Accounts for aspect-ratio letterboxing: `Resize::Scale` fits the image
-    /// proportionally, so there may be horizontal or vertical padding.
+    /// The image is placed at the top-left of the area and scaled to fit
+    /// while maintaining aspect ratio (Resize::Scale). No centering -- any
+    /// leftover space is on the right or bottom.
     fn pixel_to_cell(&self, px: f64, py: f64, area: Rect, font_size: (u16, u16)) -> (u16, u16) {
         let (fw, fh) = (font_size.0.max(1) as f64, font_size.1.max(1) as f64);
 
@@ -300,21 +301,11 @@ impl BoardImageRenderer {
         let avail_px_h = area.height as f64 * fh;
 
         // Scale factor to fit the image while keeping aspect ratio.
-        let scale_x = avail_px_w / IMG_WIDTH as f64;
-        let scale_y = avail_px_h / IMG_HEIGHT as f64;
-        let scale = scale_x.min(scale_y);
+        let scale = (avail_px_w / IMG_WIDTH as f64).min(avail_px_h / IMG_HEIGHT as f64);
 
-        // Actual rendered image size in pixels.
-        let rendered_w = IMG_WIDTH as f64 * scale;
-        let rendered_h = IMG_HEIGHT as f64 * scale;
-
-        // Padding (image is centered in the area).
-        let pad_px_x = (avail_px_w - rendered_w) / 2.0;
-        let pad_px_y = (avail_px_h - rendered_h) / 2.0;
-
-        // Map image pixel -> terminal pixel -> terminal cell.
-        let term_px_x = pad_px_x + px * scale;
-        let term_px_y = pad_px_y + py * scale;
+        // Image pixel -> terminal pixel (top-left aligned, no centering).
+        let term_px_x = px * scale;
+        let term_px_y = py * scale;
 
         let col = area.x + (term_px_x / fw) as u16;
         let row = area.y + (term_px_y / fh) as u16;
@@ -728,6 +719,83 @@ impl BoardImageRenderer {
     #[allow(dead_code)]
     pub fn generate_test_image(&self, state: &GameState) -> RgbaImage {
         self.generate_base_image(state)
+    }
+
+    /// Generate a board image with cursor markers drawn on it for visual testing.
+    ///
+    /// Draws yellow circles at all legal settlement vertex positions and
+    /// highlights the selected one. Useful for verifying that vertex pixel
+    /// positions are correct without running the TUI.
+    #[allow(dead_code)]
+    pub fn generate_test_image_with_cursors(
+        &self,
+        state: &GameState,
+        vertices: &[crate::game::board::VertexCoord],
+        selected: usize,
+    ) -> RgbaImage {
+        let mut img = self.generate_base_image(state);
+        let cursor_color = Rgba([255, 255, 0, 255]);
+        let legal_color = Rgba([255, 255, 0, 180]);
+
+        for (i, v) in vertices.iter().enumerate() {
+            if let Some(&(vx, vy)) = self.pixel_grid.vertex_pos.get(v) {
+                if i == selected {
+                    draw_filled_circle_mut(&mut img, (vx as i32, vy as i32), 10, cursor_color);
+                } else {
+                    draw_circle_outline(&mut img, vx as i32, vy as i32, 8, legal_color);
+                }
+            }
+        }
+
+        img
+    }
+
+    /// Generate a board image with a cell grid overlay for debugging coordinate mapping.
+    ///
+    /// Draws a grid of thin lines at cell boundaries (given font_size) so you
+    /// can visually verify that vertex positions align with the right cells.
+    #[allow(dead_code)]
+    pub fn generate_test_image_with_grid(
+        &self,
+        state: &GameState,
+        font_size: (u16, u16),
+        area_cells: (u16, u16),
+    ) -> RgbaImage {
+        let mut img = self.generate_base_image(state);
+        let (fw, fh) = (font_size.0.max(1) as f64, font_size.1.max(1) as f64);
+        let avail_px_w = area_cells.0 as f64 * fw;
+        let avail_px_h = area_cells.1 as f64 * fh;
+        let scale = (avail_px_w / IMG_WIDTH as f64).min(avail_px_h / IMG_HEIGHT as f64);
+
+        let grid_color = Rgba([100, 100, 100, 80]);
+
+        // Draw vertical lines at cell boundaries (in image pixel space).
+        for c in 0..=area_cells.0 {
+            let img_px_x = (c as f64 * fw / scale) as i32;
+            if img_px_x >= 0 && (img_px_x as u32) < IMG_WIDTH {
+                for y in 0..IMG_HEIGHT as i32 {
+                    if y >= 0 && (y as u32) < IMG_HEIGHT {
+                        let pixel = img.get_pixel_mut(img_px_x as u32, y as u32);
+                        *pixel = grid_color;
+                    }
+                }
+            }
+        }
+
+        // Draw horizontal lines at cell boundaries.
+        for r in 0..=area_cells.1 {
+            let img_px_y = (r as f64 * fh / scale) as i32;
+            if img_px_y >= 0 && (img_px_y as u32) < IMG_HEIGHT {
+                for x in 0..IMG_WIDTH as i32 {
+                    if x >= 0 && (x as u32) < IMG_WIDTH {
+                        let pixel = img.get_pixel_mut(x as u32, img_px_y as u32);
+                        *pixel = grid_color;
+                    }
+                }
+            }
+        }
+
+        img
     }
 }
 
