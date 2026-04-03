@@ -131,6 +131,10 @@ impl LlmPlayer {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Brief strategic reasoning for this choice"
+                    },
                     "index": {
                         "type": "integer",
                         "description": format!("Index of your choice (0 to {})", max_index.saturating_sub(1)),
@@ -150,6 +154,10 @@ impl LlmPlayer {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Brief reasoning for choosing this resource"
+                    },
                     "resource": {
                         "type": "string",
                         "enum": ["Wood", "Brick", "Sheep", "Wheat", "Ore"],
@@ -168,6 +176,10 @@ impl LlmPlayer {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Brief reasoning for discarding these cards"
+                    },
                     "cards": {
                         "type": "array",
                         "items": {
@@ -193,6 +205,10 @@ impl LlmPlayer {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Brief strategic reasoning for this trade"
+                    },
                     "give_resource": {
                         "type": "string",
                         "enum": ["Wood", "Brick", "Sheep", "Wheat", "Ore"],
@@ -232,6 +248,10 @@ impl LlmPlayer {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
+                    "reasoning": {
+                        "type": "string",
+                        "description": "Brief reasoning for this response"
+                    },
                     "response": {
                         "type": "string",
                         "enum": ["accept", "reject"],
