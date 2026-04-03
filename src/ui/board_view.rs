@@ -17,9 +17,9 @@ const HEX_COL_Q: i16 = 20;
 /// Horizontal offset per r-row (half of HEX_COL_Q).
 const HEX_COL_R: i16 = 10;
 /// Vertical distance between hex row centers.
-const HEX_ROW: i16 = 9;
+const HEX_ROW: i16 = 8;
 /// Vertical offset from center to North/South vertex.
-const VERT_OFF: i16 = 5;
+const VERT_OFF: i16 = 6;
 
 // ── Terrain colors ───────────────────────────────────────────────────
 
@@ -42,8 +42,8 @@ const UPPER_HALF: char = '\u{2580}';
 /// Lower half-block for sub-pixel compositing.
 const LOWER_HALF: char = '\u{2584}';
 
-/// Half-widths for the 7-row hex fill diamond (cy-3 to cy+3).
-const HEX_FILL_HALF_WIDTHS: [i16; 7] = [4, 6, 7, 8, 7, 6, 4];
+/// Half-widths for the 9-row hex fill diamond (cy-4 to cy+4).
+const HEX_FILL_HALF_WIDTHS: [i16; 9] = [3, 5, 7, 8, 8, 8, 7, 5, 3];
 
 /// Darken a color to ~60% brightness for terrain-tinted hex edges.
 fn darken_color(c: Color) -> Color {
@@ -118,7 +118,7 @@ impl HexGrid {
 
         // Compute ALL 6 edge midpoint positions per hex.
         let half_r = HEX_COL_R / 2;
-        let edge_dy = VERT_OFF - 1;
+        let edge_dy = HEX_ROW / 2;
         for &c in &coords {
             let (cx, cy) = hex_centers[&c];
             let edges = board::hex_edges(c);
@@ -280,7 +280,7 @@ impl SubPixelCanvas {
 /// the fill edge and vertex positions (where settlements and roads live).
 fn draw_hex_cell_fill(cx: i16, cy: i16, fill: Style, area: Rect, buf: &mut Buffer) {
     for (i, &hw) in HEX_FILL_HALF_WIDTHS.iter().enumerate() {
-        let dy = i as i16 - 3;
+        let dy = i as i16 - 4;
         for dx in -hw..=hw {
             set_cell(cx + dx, cy + dy, ' ', fill, area, buf);
         }
@@ -293,16 +293,16 @@ fn draw_hex_edges(cx: i16, cy: i16, bg: Color, area: Rect, buf: &mut Buffer) {
     let fg = darken_color(bg);
     let style = Style::default().fg(fg).bg(bg);
 
-    // Upper diagonals (cy-3 to cy-1): ╱ left, ╲ right
-    for (i, &hw) in HEX_FILL_HALF_WIDTHS.iter().enumerate().take(3) {
-        let dy = i as i16 - 3;
+    // Upper diagonals (cy-4 to cy-1): ╱ left, ╲ right
+    for (i, &hw) in HEX_FILL_HALF_WIDTHS.iter().enumerate().take(4) {
+        let dy = i as i16 - 4;
         set_cell(cx - hw, cy + dy, '╱', style, area, buf);
         set_cell(cx + hw, cy + dy, '╲', style, area, buf);
     }
 
-    // Lower diagonals (cy+1 to cy+3): ╲ left, ╱ right
-    for (i, &hw) in HEX_FILL_HALF_WIDTHS.iter().enumerate().skip(4) {
-        let dy = i as i16 - 3;
+    // Lower diagonals (cy+1 to cy+4): ╲ left, ╱ right
+    for (i, &hw) in HEX_FILL_HALF_WIDTHS.iter().enumerate().skip(5) {
+        let dy = i as i16 - 4;
         set_cell(cx - hw, cy + dy, '╲', style, area, buf);
         set_cell(cx + hw, cy + dy, '╱', style, area, buf);
     }
@@ -321,14 +321,14 @@ fn draw_road_subpixel(
         EdgeDirection::NorthEast => {
             // Smooth line from lower-left to upper-right, 2 sub-pixels wide.
             let offsets: [(i16, i16); 8] = [
-                (-3, -4),
-                (-3, -3),
-                (-2, -2),
+                (-5, -4),
+                (-4, -3),
+                (-3, -2),
                 (-1, -1),
-                (-1, 0),
-                (0, 1),
-                (1, 2),
-                (2, 3),
+                (0, 0),
+                (1, 1),
+                (3, 2),
+                (4, 3),
             ];
             for (dx, dy) in offsets {
                 canvas.set_pixel(mx + dx, smy + dy, color);
@@ -338,14 +338,14 @@ fn draw_road_subpixel(
         EdgeDirection::SouthEast => {
             // Smooth line from upper-right to lower-left, 2 sub-pixels wide.
             let offsets: [(i16, i16); 8] = [
-                (2, -2),
-                (2, -1),
-                (1, 0),
-                (0, 1),
-                (0, 2),
-                (-1, 3),
-                (-2, 4),
-                (-3, 5),
+                (4, -3),
+                (3, -2),
+                (1, -1),
+                (0, 0),
+                (-1, 1),
+                (-3, 2),
+                (-4, 3),
+                (-5, 4),
             ];
             for (dx, dy) in offsets {
                 canvas.set_pixel(mx + dx, smy + dy, color);
@@ -623,14 +623,14 @@ fn draw_cursor_overlay(
                     };
                     match e.dir {
                         EdgeDirection::NorthEast => {
-                            set_cell(sx - 1, sy - 1, '=', style, area, buf);
+                            set_cell(sx - 2, sy - 1, '=', style, area, buf);
                             set_cell(sx, sy, '=', style, area, buf);
-                            set_cell(sx + 1, sy + 1, '=', style, area, buf);
+                            set_cell(sx + 2, sy + 1, '=', style, area, buf);
                         }
                         EdgeDirection::SouthEast => {
-                            set_cell(sx - 1, sy + 1, '=', style, area, buf);
+                            set_cell(sx - 2, sy + 1, '=', style, area, buf);
                             set_cell(sx, sy, '=', style, area, buf);
-                            set_cell(sx + 1, sy - 1, '=', style, area, buf);
+                            set_cell(sx + 2, sy - 1, '=', style, area, buf);
                         }
                         EdgeDirection::East => {
                             for dy in -2..=2i16 {
@@ -756,18 +756,18 @@ mod tests {
     }
 
     #[test]
-    fn hex_cell_fill_covers_7_rows() {
+    fn hex_cell_fill_covers_9_rows() {
         let (area, mut buf) = make_buf(30, 12);
         let fill = Style::default().bg(Color::Green);
         draw_hex_cell_fill(15, 5, fill, area, &mut buf);
-        // Row cy-3 (row 2): half-width 4 -> 9 chars
-        assert_eq!(
-            buf.cell(ratatui::layout::Position::new(15, 2)).unwrap().bg,
-            Color::Green
-        );
-        // Row cy-4 (row 1): outside fill
+        // Row cy-4 (row 1): half-width 3 -> 7 chars
         assert_eq!(
             buf.cell(ratatui::layout::Position::new(15, 1)).unwrap().bg,
+            Color::Green
+        );
+        // Row cy-5 (row 0): outside fill
+        assert_eq!(
+            buf.cell(ratatui::layout::Position::new(15, 0)).unwrap().bg,
             Color::Reset
         );
         // Row cy (row 5): half-width 8 -> 17 chars (cx-8 to cx+8 = 7..23)

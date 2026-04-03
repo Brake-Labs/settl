@@ -138,23 +138,26 @@ The bottom panel is context-sensitive -- it shows different content based on gam
 ### Hex Grid Geometry
 Pointy-top hexes, interlocking. Each hex cell:
 - **Width:** ~20 characters between left and right vertices (HEX_COL_Q=20)
-- **Height:** 11 lines (top vertex to bottom vertex, VERT_OFF=5)
-- **Row spacing:** 9 lines between hex centers (HEX_ROW=9)
+- **Height:** 13 lines (top vertex to bottom vertex, VERT_OFF=6)
+- **Row spacing:** 8 lines between hex centers (HEX_ROW=8)
 - **Overlap with neighbors:** Shared vertices and edges
+- **Vertex spacing:** Even 4-row gaps between all vertex rows (N, NE/NW, SE/SW, S)
 
 ### Hex Cell Template
 ```
-              ·               <- cy-5: N vertex
-            ╱   ╲             <- cy-4: upper diagonals
-          ╱       ╲           <- cy-3: wider diagonals
-        ╱           ╲         <- cy-2: even wider
-      ╱   Wood         ╲      <- cy-1: TERRAIN label (dedicated row)
-     ·       6          ·     <- cy:   NUMBER token (dedicated row)
-      ╲             ╱      <- cy+1: lower fill
-        ╲           ╱         <- cy+2: lower diagonals
-          ╲       ╱           <- cy+3: narrower diagonals
-            ╲   ╱             <- cy+4: closing diagonals
-              ·               <- cy+5: S vertex
+              ·               <- cy-6: N vertex
+            ╱   ╲             <- cy-5
+          ╱       ╲           <- cy-4: fill starts
+        ╱           ╲         <- cy-3
+      ╱               ╲       <- cy-2: NE/NW vertices
+     |   Wood          |     <- cy-1: TERRAIN label (dedicated row)
+     |       6          |     <- cy:   NUMBER token (dedicated row)
+     |                  |     <- cy+1
+      ╲               ╱       <- cy+2: SE/SW vertices
+        ╲           ╱         <- cy+3
+          ╲       ╱           <- cy+4: fill ends
+            ╲   ╱             <- cy+5
+              ·               <- cy+6: S vertex
 ```
 
 ### Full Board Layout (3-4-5-4-3)
