@@ -181,3 +181,34 @@ impl Drop for LlamafileProcess {
 fn is_port_available(port: u16) -> bool {
     std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn drop_kills_child_process() {
+        let child = Command::new("sleep")
+            .arg("300")
+            .kill_on_drop(true)
+            .spawn()
+            .expect("failed to spawn sleep");
+
+        let pid = child.id().expect("no pid");
+        let proc_path = format!("/proc/{pid}");
+        assert!(
+            std::path::Path::new(&proc_path).exists(),
+            "process should be alive before drop"
+        );
+
+        let process = LlamafileProcess { child, port: 0 };
+        drop(process);
+
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+        assert!(
+            !std::path::Path::new(&proc_path).exists(),
+            "process should be killed after drop"
+        );
+    }
+}
