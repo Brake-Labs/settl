@@ -5,12 +5,11 @@ use tokio::sync::mpsc;
 
 use super::LlamafileStatus;
 
-const LLAMAFILE_NAME: &str = "Bonsai-1.7B.llamafile";
+const LLAMAFILE_NAME: &str = "Bonsai-8B.llamafile";
 const LLAMAFILE_URL: &str =
-    "https://huggingface.co/mozilla-ai/llamafile_0.10.0/resolve/main/Bonsai-1.7B.llamafile?download=true";
+    "https://huggingface.co/mozilla-ai/llamafile_0.10.0/resolve/main/Bonsai-8B.llamafile?download=true";
 
 /// Minimum file size to consider a cached llamafile valid (100 MB).
-/// The actual Bonsai-1.7B file is ~1.7 GB.
 const MIN_VALID_SIZE: u64 = 100 * 1024 * 1024;
 
 /// Return the directory where llamafiles are stored: `~/.settl/llamafiles/`.
@@ -158,6 +157,6 @@ mod tests {
     fn llamafile_path_includes_filename() {
         std::env::set_var("HOME", "/tmp/test_home");
         let path = llamafile_path();
-        assert!(path.ends_with("Bonsai-1.7B.llamafile"));
+        assert!(path.ends_with("Bonsai-8B.llamafile"));
     }
 }

@@ -26,10 +26,6 @@ pub struct MessagesRequest {
     pub tools: Vec<ToolDef>,
     /// Enable streaming (SSE) responses.
     pub stream: bool,
-    /// Controls how much reasoning effort the model uses ("low", "medium", "high").
-    /// Omitted when None (model uses default).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub reasoning_effort: Option<String>,
     // -- llamafile extensions (omitted when None) --
     /// Assign this request to a specific KV cache slot.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -48,7 +44,6 @@ impl MessagesRequest {
             messages: Vec::new(),
             tools: Vec::new(),
             stream: false,
-            reasoning_effort: None,
             id_slot: None,
             cache_prompt: None,
         }
@@ -541,18 +536,6 @@ impl AnthropicClient {
                     ..
                 } => {
                     if tool_name == name {
-                        // Fall back to reasoning inside the tool input for models
-                        // that don't produce separate text blocks (e.g. llamafile).
-                        let tool_reasoning = input
-                            .get("reasoning")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
-                        if !tool_reasoning.is_empty() {
-                            if !reasoning.is_empty() {
-                                reasoning.push('\n');
-                            }
-                            reasoning.push_str(tool_reasoning);
-                        }
                         return Some((input.clone(), reasoning));
                     }
                 }
@@ -638,27 +621,6 @@ mod tests {
             .expect("should find tool call");
         assert_eq!(args["index"], 2);
         assert!(reasoning.contains("I think option 2 is best"));
-    }
-
-    #[test]
-    fn extract_tool_call_uses_tool_input_reasoning_fallback() {
-        // Models like llamafile/Bonsai put reasoning in the tool input, not text blocks.
-        let response = MessagesResponse {
-            id: "msg-1".into(),
-            content: vec![ContentBlock::ToolUse {
-                id: "tu-1".into(),
-                name: "choose_index".into(),
-                input: json!({"index": 1, "reasoning": "High pip count"}),
-            }],
-            model: "bonsai".into(),
-            stop_reason: Some("tool_use".into()),
-            usage: None,
-        };
-
-        let (args, reasoning) = AnthropicClient::extract_tool_call(&response, "choose_index")
-            .expect("should find tool call");
-        assert_eq!(args["index"], 1);
-        assert!(reasoning.contains("High pip count"));
     }
 
     #[test]

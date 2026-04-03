@@ -20,7 +20,7 @@ use crate::player::{Player, PlayerChoice};
 /// Maximum conversation history pairs before trimming.
 const MAX_HISTORY_PAIRS: usize = 30;
 
-/// Default model name for llamafile (Bonsai-1.7B).
+/// Default model name for llamafile (Bonsai-8B).
 pub const LLAMAFILE_MODEL: &str = "bonsai";
 
 /// Per-player conversation state.
@@ -131,10 +131,6 @@ impl LlmPlayer {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Brief strategic reasoning for this choice"
-                    },
                     "index": {
                         "type": "integer",
                         "description": format!("Index of your choice (0 to {})", max_index.saturating_sub(1)),
@@ -154,10 +150,6 @@ impl LlmPlayer {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Brief reasoning for choosing this resource"
-                    },
                     "resource": {
                         "type": "string",
                         "enum": ["Wood", "Brick", "Sheep", "Wheat", "Ore"],
@@ -176,10 +168,6 @@ impl LlmPlayer {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Brief reasoning for discarding these cards"
-                    },
                     "cards": {
                         "type": "array",
                         "items": {
@@ -205,10 +193,6 @@ impl LlmPlayer {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Brief strategic reasoning for this trade"
-                    },
                     "give_resource": {
                         "type": "string",
                         "enum": ["Wood", "Brick", "Sheep", "Wheat", "Ore"],
@@ -248,10 +232,6 @@ impl LlmPlayer {
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "reasoning": {
-                        "type": "string",
-                        "description": "Brief reasoning for this response"
-                    },
                     "response": {
                         "type": "string",
                         "enum": ["accept", "reject"],
@@ -313,7 +293,6 @@ impl LlmPlayer {
             request.id_slot = self.slot_id;
             request.cache_prompt = Some(true);
             request.stream = self.reasoning_tx.is_some();
-            request.reasoning_effort = Some("low".into());
 
             // On retry, notify the UI that we're retrying.
             if attempt > 0 {

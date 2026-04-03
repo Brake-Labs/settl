@@ -84,7 +84,7 @@ pub async fn run(cli: HeadlessCli) {
     println!("settl - Terminal Edition with LLM Players");
     println!("==========================================\n");
     println!("{}\n", player::prompt::ascii_board(&board));
-    println!("Starting game with local AI (Bonsai-1.7B)...\n");
+    println!("Starting game with local AI (Bonsai-8B)...\n");
 
     let mut orchestrator = game::orchestrator::GameOrchestrator::new(state, players);
 
@@ -134,14 +134,14 @@ async fn setup_llamafile_headless() -> (u16, crate::llamafile::LlamafileProcess)
     loop {
         match status_rx.recv().await {
             Some(LlamafileStatus::Checking) => {
-                eprint!("Checking for Bonsai-1.7B...");
+                eprint!("Checking for Bonsai-8B...");
             }
             Some(LlamafileStatus::Downloading { bytes, total }) => {
                 if total > 0 {
                     let pct = (bytes as f64 / total as f64 * 100.0) as u16;
                     if pct != last_pct {
                         eprint!(
-                            "\rDownloading Bonsai-1.7B... {} / {} ({}%)",
+                            "\rDownloading Bonsai-8B... {} / {} ({}%)",
                             format_bytes(bytes),
                             format_bytes(total),
                             pct
@@ -149,7 +149,7 @@ async fn setup_llamafile_headless() -> (u16, crate::llamafile::LlamafileProcess)
                         last_pct = pct;
                     }
                 } else {
-                    eprint!("\rDownloading Bonsai-1.7B... {}", format_bytes(bytes));
+                    eprint!("\rDownloading Bonsai-8B... {}", format_bytes(bytes));
                 }
             }
             Some(LlamafileStatus::Preparing) => {
