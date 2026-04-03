@@ -36,8 +36,8 @@ pub fn render_chat(messages: &[ChatMessage], scroll: u16, area: Rect, buf: &mut 
         )];
 
         // Truncate long reasoning to keep the panel readable (char-safe).
-        let text = if msg.text.chars().count() > 200 {
-            let truncated: String = msg.text.chars().take(197).collect();
+        let text = if msg.text.chars().count() > 2000 {
+            let truncated: String = msg.text.chars().take(1997).collect();
             format!("{}...", truncated)
         } else {
             msg.text.clone()

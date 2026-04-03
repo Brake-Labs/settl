@@ -182,7 +182,7 @@ impl AnthropicClient {
     ) -> Arc<Self> {
         let http = reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_secs(5))
-            .timeout(std::time::Duration::from_secs(45))
+            .timeout(std::time::Duration::from_secs(300))
             .build()
             .expect("failed to build HTTP client");
         Arc::new(Self {
@@ -252,6 +252,226 @@ impl AnthropicClient {
         })
     }
 
+    /// Send a streaming Messages API request, forwarding text deltas to `reasoning_tx`
+    /// as they arrive. Returns the fully assembled response when the stream completes.
+    pub async fn send_message_streaming(
+        &self,
+        request: &MessagesRequest,
+        reasoning_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
+    ) -> Result<MessagesResponse, ApiError> {
+        let url = format!("{}/v1/messages", self.base_url);
+
+        log::debug!(
+            "AnthropicClient::send_message_streaming url={} model={} messages={} tools={}",
+            url,
+            request.model,
+            request.messages.len(),
+            request.tools.len(),
+        );
+
+        let resp = self
+            .http
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .header("x-api-key", &self.api_key)
+            .header("anthropic-version", ANTHROPIC_VERSION)
+            .json(request)
+            .send()
+            .await
+            .map_err(|e| ApiError {
+                status: None,
+                message: format!("HTTP request failed: {}", e),
+            })?;
+
+        let status = resp.status();
+        if !status.is_success() {
+            let body = resp.text().await.unwrap_or_default();
+            return Err(ApiError {
+                status: Some(status.as_u16()),
+                message: body,
+            });
+        }
+
+        // Parse SSE stream into content blocks.
+        let mut content_blocks: Vec<ContentBlock> = Vec::new();
+        let mut response_id = String::new();
+        let mut response_model = String::new();
+        let mut stop_reason: Option<String> = None;
+        let mut usage: Option<Usage> = None;
+
+        // Per-block accumulators.
+        let mut current_text = String::new();
+        let mut current_tool_id = String::new();
+        let mut current_tool_name = String::new();
+        let mut current_tool_json = String::new();
+        let mut current_block_type: Option<&'static str> = None;
+
+        // SSE line buffer (chunks may split across lines).
+        let mut buf = String::new();
+        let mut current_event_type = String::new();
+
+        let mut resp = resp;
+        while let Some(chunk) = resp.chunk().await.map_err(|e| ApiError {
+            status: None,
+            message: format!("Stream read error: {}", e),
+        })? {
+            buf.push_str(&String::from_utf8_lossy(&chunk));
+
+            while let Some(line_end) = buf.find('\n') {
+                let line = buf[..line_end].trim_end_matches('\r').to_string();
+                buf = buf[line_end + 1..].to_string();
+
+                if let Some(event_type) = line.strip_prefix("event: ") {
+                    current_event_type = event_type.to_string();
+                } else if let Some(data) = line.strip_prefix("data: ") {
+                    let Ok(json) = serde_json::from_str::<serde_json::Value>(data) else {
+                        continue;
+                    };
+
+                    match current_event_type.as_str() {
+                        "message_start" => {
+                            if let Some(msg) = json.get("message") {
+                                response_id = msg
+                                    .get("id")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                response_model = msg
+                                    .get("model")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or("")
+                                    .to_string();
+                                if let Some(u) = msg.get("usage") {
+                                    usage = serde_json::from_value(u.clone()).ok();
+                                }
+                            }
+                        }
+                        "content_block_start" => {
+                            if let Some(cb) = json.get("content_block") {
+                                let block_type =
+                                    cb.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                                match block_type {
+                                    "text" => {
+                                        current_block_type = Some("text");
+                                        current_text.clear();
+                                        let initial =
+                                            cb.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                                        if !initial.is_empty() {
+                                            current_text.push_str(initial);
+                                            if let Some(tx) = &reasoning_tx {
+                                                let _ = tx.send(initial.to_string());
+                                            }
+                                        }
+                                    }
+                                    "tool_use" => {
+                                        current_block_type = Some("tool_use");
+                                        current_tool_id = cb
+                                            .get("id")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        current_tool_name = cb
+                                            .get("name")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("")
+                                            .to_string();
+                                        current_tool_json.clear();
+                                    }
+                                    _ => {
+                                        current_block_type = None;
+                                    }
+                                }
+                            }
+                        }
+                        "content_block_delta" => {
+                            if let Some(delta) = json.get("delta") {
+                                let delta_type =
+                                    delta.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                                match delta_type {
+                                    "text_delta" => {
+                                        let text = delta
+                                            .get("text")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        if !text.is_empty() {
+                                            current_text.push_str(text);
+                                            if let Some(tx) = &reasoning_tx {
+                                                let _ = tx.send(text.to_string());
+                                            }
+                                        }
+                                    }
+                                    "input_json_delta" => {
+                                        let partial = delta
+                                            .get("partial_json")
+                                            .and_then(|v| v.as_str())
+                                            .unwrap_or("");
+                                        current_tool_json.push_str(partial);
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        "content_block_stop" => match current_block_type {
+                            Some("text") => {
+                                content_blocks.push(ContentBlock::Text {
+                                    text: std::mem::take(&mut current_text),
+                                });
+                                current_block_type = None;
+                            }
+                            Some("tool_use") => {
+                                let input: serde_json::Value =
+                                    serde_json::from_str(&current_tool_json)
+                                        .unwrap_or(serde_json::Value::Object(Default::default()));
+                                content_blocks.push(ContentBlock::ToolUse {
+                                    id: std::mem::take(&mut current_tool_id),
+                                    name: std::mem::take(&mut current_tool_name),
+                                    input,
+                                });
+                                current_tool_json.clear();
+                                current_block_type = None;
+                            }
+                            _ => {}
+                        },
+                        "message_delta" => {
+                            if let Some(delta) = json.get("delta") {
+                                stop_reason = delta
+                                    .get("stop_reason")
+                                    .and_then(|v| v.as_str())
+                                    .map(|s| s.to_string());
+                            }
+                            if let Some(u) = json.get("usage") {
+                                if let Ok(u) = serde_json::from_value::<Usage>(u.clone()) {
+                                    // Merge output_tokens from message_delta.
+                                    if let Some(ref mut existing) = usage {
+                                        existing.output_tokens = u.output_tokens;
+                                    } else {
+                                        usage = Some(u);
+                                    }
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            }
+        }
+
+        log::debug!(
+            "AnthropicClient::send_message_streaming done: id={} blocks={} stop={:?}",
+            response_id,
+            content_blocks.len(),
+            stop_reason,
+        );
+
+        Ok(MessagesResponse {
+            id: response_id,
+            content: content_blocks,
+            model: response_model,
+            stop_reason,
+            usage,
+        })
+    }
+
     /// Extract the first tool call matching `name` from a response.
     ///
     /// Returns `(tool_input_args, reasoning_text)` where reasoning is the text
@@ -276,17 +496,6 @@ impl AnthropicClient {
                     ..
                 } => {
                     if tool_name == name {
-                        // Also check for reasoning inside the tool input itself.
-                        let tool_reasoning = input
-                            .get("reasoning")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
-                        if !tool_reasoning.is_empty() {
-                            if !reasoning.is_empty() {
-                                reasoning.push('\n');
-                            }
-                            reasoning.push_str(tool_reasoning);
-                        }
                         return Some((input.clone(), reasoning));
                     }
                 }
@@ -355,12 +564,12 @@ mod tests {
             id: "msg-1".into(),
             content: vec![
                 ContentBlock::Text {
-                    text: "I think option 2 is best.".into(),
+                    text: "I think option 2 is best because it has good resources.".into(),
                 },
                 ContentBlock::ToolUse {
                     id: "tu-1".into(),
                     name: "choose_index".into(),
-                    input: json!({"reasoning": "Good resources", "index": 2}),
+                    input: json!({"index": 2}),
                 },
             ],
             model: "test".into(),
@@ -371,8 +580,7 @@ mod tests {
         let (args, reasoning) = AnthropicClient::extract_tool_call(&response, "choose_index")
             .expect("should find tool call");
         assert_eq!(args["index"], 2);
-        assert!(reasoning.contains("I think option 2 is best."));
-        assert!(reasoning.contains("Good resources"));
+        assert!(reasoning.contains("I think option 2 is best"));
     }
 
     #[test]

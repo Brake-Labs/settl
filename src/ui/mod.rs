@@ -56,11 +56,17 @@ pub enum UiEvent {
         event: Option<GameEvent>,
         message: String,
     },
-    /// AI reasoning trace from an LLM or random player.
+    /// AI reasoning trace from an LLM or random player (complete, final).
     AiReasoning {
         player_id: usize,
         player_name: String,
         reasoning: String,
+    },
+    /// A streaming text chunk from an AI player's reasoning (appended progressively).
+    AiReasoningChunk {
+        player_id: usize,
+        player_name: String,
+        chunk: String,
     },
     /// The game has ended.
     GameOver { winner: usize, message: String },
@@ -382,16 +388,54 @@ impl PlayingState {
                 player_name,
                 reasoning,
             } => {
-                self.chat_messages.push(chat_panel::ChatMessage {
-                    player: player_name,
-                    player_id,
-                    text: reasoning,
-                });
-                // Cap chat messages to prevent unbounded growth.
+                // If the last message is from the same player (streaming in-progress),
+                // replace its text with the final clean version.
+                if let Some(last) = self.chat_messages.last_mut() {
+                    if last.player_id == player_id {
+                        last.text = reasoning;
+                    } else {
+                        self.chat_messages.push(chat_panel::ChatMessage {
+                            player: player_name,
+                            player_id,
+                            text: reasoning,
+                        });
+                    }
+                } else {
+                    self.chat_messages.push(chat_panel::ChatMessage {
+                        player: player_name,
+                        player_id,
+                        text: reasoning,
+                    });
+                }
                 const MAX_CHAT: usize = 500;
                 if self.chat_messages.len() > MAX_CHAT {
                     self.chat_messages
                         .drain(..self.chat_messages.len() - MAX_CHAT);
+                }
+                self.chat_scroll = self.chat_messages.len().saturating_sub(1) as u16;
+            }
+            UiEvent::AiReasoningChunk {
+                player_id,
+                player_name,
+                chunk,
+            } => {
+                // Append to the last message if from the same player, otherwise start a new one.
+                if let Some(last) = self.chat_messages.last_mut() {
+                    if last.player_id == player_id {
+                        last.text.push_str(&chunk);
+                    } else {
+                        self.chat_messages.push(chat_panel::ChatMessage {
+                            player: player_name,
+                            player_id,
+                            text: chunk,
+                        });
+                    }
+                } else {
+                    self.chat_messages.push(chat_panel::ChatMessage {
+                        player: player_name,
+                        player_id,
+                        text: chunk,
+                    });
                 }
                 self.chat_scroll = self.chat_messages.len().saturating_sub(1) as u16;
             }
@@ -1163,10 +1207,12 @@ fn launch_game(
         )
     });
 
-    let players: Vec<Box<dyn player::Player>> = active_players
-        .iter()
-        .enumerate()
-        .map(|(slot_id, pc)| match pc.kind {
+    // Create UI event channel.
+    let (tx, rx) = mpsc::unbounded_channel();
+
+    let mut players: Vec<Box<dyn player::Player>> = Vec::new();
+    for (slot_id, pc) in active_players.iter().enumerate() {
+        match pc.kind {
             PlayerKind::Llamafile => {
                 let personality = if pc.personality_index < built_in_personalities.len() {
                     built_in_personalities[pc.personality_index].clone()
@@ -1180,24 +1226,39 @@ fn launch_game(
                 let client = llama_client
                     .clone()
                     .expect("llamafile client should exist when Llamafile players are used");
-                Box::new(player::llm_player::LlmPlayer::new(
+                let mut llm = player::llm_player::LlmPlayer::new(
                     pc.name.clone(),
                     client,
                     personality,
                     Some(slot_id),
-                )) as Box<dyn player::Player>
+                );
+
+                // Set up streaming reasoning bridge: LlmPlayer -> String chunks -> UiEvent.
+                let (reasoning_tx, mut reasoning_rx) = mpsc::unbounded_channel::<String>();
+                llm.set_reasoning_sender(reasoning_tx);
+                let ui_tx_clone = tx.clone();
+                let player_name_clone = pc.name.clone();
+                tokio::spawn(async move {
+                    while let Some(chunk) = reasoning_rx.recv().await {
+                        let _ = ui_tx_clone.send(UiEvent::AiReasoningChunk {
+                            player_id: slot_id,
+                            player_name: player_name_clone.clone(),
+                            chunk,
+                        });
+                    }
+                });
+
+                players.push(Box::new(llm) as Box<dyn player::Player>);
             }
             PlayerKind::Human => {
                 let channel = human_channels.as_ref().unwrap().0.clone();
-                Box::new(TuiHumanPlayer::new(pc.name.clone(), channel)) as Box<dyn player::Player>
+                players.push(Box::new(TuiHumanPlayer::new(pc.name.clone(), channel))
+                    as Box<dyn player::Player>);
             }
-        })
-        .collect();
+        }
+    }
 
     let player_names: Vec<String> = active_players.iter().map(|p| p.name.clone()).collect();
-
-    // Create channel.
-    let (tx, rx) = mpsc::unbounded_channel();
 
     // Spawn game engine.
     tokio::spawn(async move {
