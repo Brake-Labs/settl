@@ -41,7 +41,8 @@ pub async fn run(cli: HeadlessCli) {
     let state = game::state::GameState::new(board.clone(), cli.players);
 
     // Start local llamafile AI server.
-    let port = setup_llamafile_headless().await;
+    // Keep `_process` alive so the llamafile is killed when this function returns.
+    let (port, _process) = setup_llamafile_headless().await;
     let client = player::anthropic_client::AnthropicClient::new(
         format!("http://127.0.0.1:{}", port),
         "no-key",
@@ -93,8 +94,7 @@ pub async fn run(cli: HeadlessCli) {
                 "\nFinal scores: {}",
                 (0..cli.players)
                     .map(|p| format!(
-                        "Player {} ({}): {} VP",
-                        p,
+                        "{}: {} VP",
                         orchestrator.player_names[p],
                         orchestrator.state.victory_points(p)
                     ))
@@ -109,8 +109,8 @@ pub async fn run(cli: HeadlessCli) {
 }
 
 /// Download (if needed) and start a local llamafile, printing progress to stderr.
-/// Returns the port the server is listening on. Panics on failure.
-async fn setup_llamafile_headless() -> u16 {
+/// Returns the port and the process handle (caller must keep it alive).
+async fn setup_llamafile_headless() -> (u16, crate::llamafile::LlamafileProcess) {
     use crate::llamafile::{format_bytes, LlamafileStatus};
 
     let (status_tx, mut status_rx) = tokio::sync::mpsc::unbounded_channel();
@@ -163,11 +163,8 @@ async fn setup_llamafile_headless() -> u16 {
             }
             Some(LlamafileStatus::Ready(port)) => {
                 eprintln!(" ready on port {}!", port);
-                // Intentionally leak the process so it stays alive for the
-                // duration of the program. The OS cleans it up on exit.
                 let process = handle.await.expect("llamafile setup task panicked");
-                Box::leak(Box::new(process));
-                return port;
+                return (port, process);
             }
             Some(LlamafileStatus::Error(e)) => {
                 panic!("Llamafile setup failed: {}", e);

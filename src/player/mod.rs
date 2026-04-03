@@ -31,6 +31,12 @@ pub enum PlayerChoice {
     PlayRoadBuilding,
     /// Intent to propose a trade — offer details collected separately.
     ProposeTrade,
+    /// Intent to build a road — edge collected via board cursor.
+    BuildRoadIntent,
+    /// Intent to build a settlement — vertex collected via board cursor.
+    BuildSettlementIntent,
+    /// Intent to build a city — vertex collected via board cursor.
+    BuildCityIntent,
 }
 
 impl PlayerChoice {
@@ -50,6 +56,9 @@ impl PlayerChoice {
             PlayerChoice::PlayYearOfPlenty => "Play Year of Plenty",
             PlayerChoice::PlayRoadBuilding => "Play Road Building",
             PlayerChoice::ProposeTrade => "Propose Trade",
+            PlayerChoice::BuildRoadIntent => "Build Road",
+            PlayerChoice::BuildSettlementIntent => "Build Settlement",
+            PlayerChoice::BuildCityIntent => "Build City",
         }
     }
 
@@ -66,6 +75,9 @@ impl PlayerChoice {
             | PlayerChoice::PlayMonopoly
             | PlayerChoice::PlayYearOfPlenty
             | PlayerChoice::PlayRoadBuilding => Some('p'),
+            PlayerChoice::BuildRoadIntent => Some('r'),
+            PlayerChoice::BuildSettlementIntent => Some('s'),
+            PlayerChoice::BuildCityIntent => Some('c'),
             _ => None,
         }
     }
@@ -96,6 +108,9 @@ impl std::fmt::Display for PlayerChoice {
             PlayerChoice::PlayYearOfPlenty => write!(f, "Play Year of Plenty"),
             PlayerChoice::PlayRoadBuilding => write!(f, "Play Road Building"),
             PlayerChoice::ProposeTrade => write!(f, "Propose Trade"),
+            PlayerChoice::BuildRoadIntent => write!(f, "Build Road"),
+            PlayerChoice::BuildSettlementIntent => write!(f, "Build Settlement"),
+            PlayerChoice::BuildCityIntent => write!(f, "Build City"),
         }
     }
 }
@@ -128,6 +143,7 @@ pub trait Player: Send + Sync {
         player_id: PlayerId,
         legal_vertices: &[VertexCoord],
         round: u8,
+        player_names: &[String],
     ) -> (usize, String);
 
     /// Choose an edge to place a road.
@@ -137,6 +153,7 @@ pub trait Player: Send + Sync {
         state: &GameState,
         player_id: PlayerId,
         legal_edges: &[EdgeCoord],
+        player_names: &[String],
     ) -> (usize, String);
 
     /// Choose a hex to move the robber to (after rolling 7 or playing Knight).
@@ -155,6 +172,7 @@ pub trait Player: Send + Sync {
         state: &GameState,
         player_id: PlayerId,
         targets: &[PlayerId],
+        player_names: &[String],
     ) -> (usize, String);
 
     /// Choose which cards to discard (when holding >7 cards on a 7-roll).
@@ -188,6 +206,7 @@ pub trait Player: Send + Sync {
         state: &GameState,
         player_id: PlayerId,
         offer: &TradeOffer,
+        player_names: &[String],
     ) -> (TradeResponse, String);
 
     /// Provide extra game context (recent history, trade log) for the player's

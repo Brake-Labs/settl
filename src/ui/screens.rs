@@ -61,7 +61,7 @@ pub struct PlayerConfig {
     pub personality_index: usize,
 }
 
-const DEFAULT_NAMES: &[&str] = &["Alice", "Bob", "Charlie", "Diana"];
+const DEFAULT_NAMES: &[&str] = &["Marco", "Leif", "Vasco"];
 
 /// Which row has focus on the new game screen.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -120,7 +120,7 @@ impl NewGameState {
                     }
                 } else {
                     PlayerConfig {
-                        name: DEFAULT_NAMES[i].into(),
+                        name: DEFAULT_NAMES[i - 1].into(),
                         kind: PlayerKind::Llamafile,
                         personality_index: i.min(personality_names.len().saturating_sub(1)),
                     }

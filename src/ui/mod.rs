@@ -401,10 +401,7 @@ impl PlayingState {
                     .get(winner)
                     .cloned()
                     .unwrap_or_else(|| "?".into());
-                self.push_message(format!(
-                    "GAME OVER: Player {} ({}) wins!",
-                    winner, winner_name,
-                ));
+                self.push_message(format!("GAME OVER: {} wins!", winner_name));
                 self.push_message(message.clone());
                 self.game_over = true;
                 self.game_over_winner = Some((winner, winner_name));
@@ -1126,7 +1123,8 @@ fn launch_game(
         Board::default_board()
     };
 
-    let state = GameState::new(board, ng.num_players());
+    let mut state = GameState::new(board, ng.num_players());
+    state.friendly_robber = ng.friendly_robber;
 
     // Build players.
     let built_in_personalities = [

@@ -10,9 +10,9 @@ expression: buffer_to_string(&buf)
                                                          Players:  ○ 3   ● 4
 
                                                          1  Player        Human
-                                                         2  Bob           Llamafile   Aggressive
-                                                         3  Charlie       Llamafile   Grudge Holder
-                                                         4  Diana         Llamafile   Builder
+                                                         2  Marco         Llamafile   Aggressive
+                                                         3  Leif          Llamafile   Grudge Holder
+                                                         4  Vasco         Llamafile   Builder
 
                                                      RULES
 
