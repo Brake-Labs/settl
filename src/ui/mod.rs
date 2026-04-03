@@ -1087,12 +1087,6 @@ fn cycle_new_game_value(state: &mut NewGameState, forward: bool) {
     match state.focus {
         NewGameFocus::PlayerCount => {
             state.four_players = !state.four_players;
-            // If switching to 3 players while focused on player 4, adjust.
-            if !state.four_players {
-                if let NewGameFocus::Player { row: 3 } = state.focus {
-                    state.focus = NewGameFocus::Player { row: 2 };
-                }
-            }
         }
         NewGameFocus::Player { row } => {
             let player = &mut state.players[row];
@@ -1144,7 +1138,8 @@ fn launch_game(
     ];
 
     // Create human input channels if any human players exist.
-    let has_human = ng.players.iter().any(|p| p.kind == PlayerKind::Human);
+    let active_players = &ng.players[..ng.num_players()];
+    let has_human = active_players.iter().any(|p| p.kind == PlayerKind::Human);
     let human_channels: Option<(
         Arc<HumanInputChannel>,
         mpsc::UnboundedReceiver<player::tui_human::HumanPrompt>,
@@ -1164,8 +1159,7 @@ fn launch_game(
     // Build a shared llamafile client if any player needs it.
     let llama_client = llamafile_port.map(player::llamafile_player::llamafile_client);
 
-    let players: Vec<Box<dyn player::Player>> = ng
-        .players
+    let players: Vec<Box<dyn player::Player>> = active_players
         .iter()
         .map(|pc| match pc.kind {
             PlayerKind::Llamafile => {
@@ -1195,7 +1189,7 @@ fn launch_game(
         })
         .collect();
 
-    let player_names: Vec<String> = ng.players.iter().map(|p| p.name.clone()).collect();
+    let player_names: Vec<String> = active_players.iter().map(|p| p.name.clone()).collect();
 
     // Create channel.
     let (tx, rx) = mpsc::unbounded_channel();
