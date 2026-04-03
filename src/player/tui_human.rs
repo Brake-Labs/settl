@@ -19,7 +19,7 @@ use crate::player::{Player, PlayerChoice};
 #[derive(Debug)]
 pub enum PromptKind {
     /// Pick from a list of game actions (action bar with shortcuts).
-    ChooseAction { choices: Vec<String> },
+    ChooseAction { choices: Vec<PlayerChoice> },
     /// Place a settlement on one of these legal vertices (board cursor).
     PlaceSettlement { legal: Vec<VertexCoord> },
     /// Place a road on one of these legal edges (board cursor).
@@ -135,10 +135,15 @@ impl Player for TuiHumanPlayer {
         player_id: PlayerId,
         choices: &[PlayerChoice],
     ) -> (usize, String) {
-        let labels: Vec<String> = choices.iter().map(|c| format!("{}", c)).collect();
         let max = choices.len().saturating_sub(1);
         let idx = self
-            .pick_index(player_id, PromptKind::ChooseAction { choices: labels }, max)
+            .pick_index(
+                player_id,
+                PromptKind::ChooseAction {
+                    choices: choices.to_vec(),
+                },
+                max,
+            )
             .await;
         (idx, String::new())
     }

@@ -395,7 +395,7 @@ async fn human_receives_choose_action_during_turn() {
     // Custom response loop that records prompt details.
     let respond_handle = tokio::spawn(async move {
         let mut log: Vec<String> = Vec::new();
-        let mut first_action_choices: Option<Vec<String>> = None;
+        let mut first_action_choices: Option<Vec<crate::player::PlayerChoice>> = None;
 
         while let Some(prompt) = prompt_rx.recv().await {
             let name = prompt_kind_name(&prompt.kind).to_string();
@@ -451,7 +451,7 @@ async fn human_receives_choose_action_during_turn() {
 
     // EndTurn should always be one of the choices.
     assert!(
-        choices.iter().any(|c| c.contains("End Turn")),
+        choices.iter().any(|c| c.is_end_turn()),
         "ChooseAction should include End Turn, got: {:?}",
         choices
     );

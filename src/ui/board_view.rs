@@ -499,7 +499,10 @@ fn draw_cursor_overlay(
                     } else {
                         legal_style
                     };
+                    // 3-wide marker for hex cursor to match settlement/road visual weight.
+                    set_cell(sx - 1, sy, '[', style, area, buf);
                     set_cell(sx, sy, 'R', style, area, buf);
+                    set_cell(sx + 1, sy, ']', style, area, buf);
                 }
             }
         }

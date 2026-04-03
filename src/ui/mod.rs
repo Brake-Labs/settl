@@ -36,12 +36,6 @@ use crate::player::personality::Personality;
 
 use screens::*;
 
-/// Receiver for the llamafile process from the background setup task.
-/// Set when the setup screen is active; taken when setup completes.
-static LLAMAFILE_RESULT: std::sync::Mutex<
-    Option<tokio::sync::oneshot::Receiver<crate::llamafile::LlamafileProcess>>,
-> = std::sync::Mutex::new(None);
-
 /// Bright player colors for buildings and roads on the board.
 pub const PLAYER_COLORS: [Color; 4] = [
     Color::LightRed,
@@ -88,6 +82,7 @@ pub enum Screen {
 use crate::game::actions::TradeOffer;
 use crate::game::board::{EdgeCoord, HexCoord, Resource, VertexCoord};
 use crate::player::tui_human::{HumanResponse, PromptKind};
+use crate::player::PlayerChoice;
 
 /// Map a resource key character (w/b/s/h/o) to its index in `Resource::all()`.
 fn resource_key_index(key: KeyCode) -> Option<usize> {
@@ -143,7 +138,7 @@ pub enum InputMode {
     Spectating,
     /// Choosing a game action from a horizontal bar.
     ActionBar {
-        choices: Vec<String>,
+        choices: Vec<PlayerChoice>,
         selected: usize,
     },
     /// Navigating legal positions on the board with arrow keys.
@@ -496,12 +491,13 @@ async fn run_event_loop(
                                     } else {
                                         let (status_tx, status_rx) = mpsc::unbounded_channel();
                                         let saved_config = clone_new_game_state(ng);
-                                        let handle = spawn_llamafile_setup(status_tx);
+                                        let (handle, process_rx) = spawn_llamafile_setup(status_tx);
                                         let setup_state = LlamafileSetupState {
                                             status: crate::llamafile::LlamafileStatus::Checking,
                                             status_rx,
                                             saved_config,
                                             task_handle: Some(handle),
+                                            process_rx: Some(process_rx),
                                         };
                                         app.screen = Screen::LlamafileSetup(setup_state);
                                     }
@@ -525,11 +521,9 @@ async fn run_event_loop(
             if let crate::llamafile::LlamafileStatus::Ready(port) = &setup.status {
                 let port = *port;
                 // Take the process from the oneshot receiver.
-                if let Ok(mut guard) = LLAMAFILE_RESULT.lock() {
-                    if let Some(mut rx) = guard.take() {
-                        if let Ok(process) = rx.try_recv() {
-                            app.llamafile_process = Some(process);
-                        }
+                if let Some(mut rx) = setup.process_rx.take() {
+                    if let Ok(process) = rx.try_recv() {
+                        app.llamafile_process = Some(process);
                     }
                 }
                 // Move saved_config out of the setup state.
@@ -689,10 +683,7 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                     if let Some(handle) = setup.task_handle.take() {
                         handle.abort();
                     }
-                    // Clear any pending oneshot receiver.
-                    if let Ok(mut guard) = LLAMAFILE_RESULT.lock() {
-                        guard.take();
-                    }
+                    // Drop the oneshot receiver (cleaned up with the setup state).
                     Action::Transition(Screen::NewGame(setup.saved_config))
                 } else {
                     Action::Transition(Screen::NewGame(NewGameState::new(&app.personalities)))
@@ -768,16 +759,6 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                 }
 
                 InputMode::ActionBar { choices, selected } => {
-                    // Shortcut key -> action name fragment lookup.
-                    const ACTION_SHORTCUTS: &[(char, &str)] = &[
-                        ('e', "End Turn"),
-                        ('s', "Build Settlement"),
-                        ('r', "Build Road"),
-                        ('c', "Build City"),
-                        ('d', "Buy Development Card"),
-                        ('t', "Propose Trade"),
-                    ];
-
                     match key {
                         KeyCode::Left | KeyCode::Up | KeyCode::Char('k') => {
                             *selected = selected.saturating_sub(1);
@@ -791,24 +772,15 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                             let idx = *selected;
                             ps.respond_index(idx);
                         }
-                        KeyCode::Char('p') => {
-                            // Play dev card (any variant -- uses starts_with, not contains)
-                            if let Some(idx) = choices.iter().position(|c| c.starts_with("Play ")) {
+                        KeyCode::Char(ch) => {
+                            if let Some(idx) =
+                                choices.iter().position(|c| c.shortcut_key() == Some(ch))
+                            {
                                 ps.respond_index(idx);
                             }
                         }
-                        KeyCode::Char(ch) => {
-                            if let Some((_, fragment)) =
-                                ACTION_SHORTCUTS.iter().find(|(k, _)| *k == ch)
-                            {
-                                if let Some(idx) = choices.iter().position(|c| c.contains(fragment))
-                                {
-                                    ps.respond_index(idx);
-                                }
-                            }
-                        }
                         KeyCode::Esc => {
-                            if let Some(idx) = choices.iter().position(|c| c.contains("End Turn")) {
+                            if let Some(idx) = choices.iter().position(|c| c.is_end_turn()) {
                                 ps.respond_index(idx);
                             }
                         }
@@ -1338,17 +1310,16 @@ fn build_post_game(ps: &PlayingState) -> PostGameState {
 
 /// Spawn a background task that downloads (if needed) and starts the llamafile.
 ///
-/// Returns the `JoinHandle` so the caller can abort on cancel.
-/// The process is sent back via a oneshot channel stored in `LLAMAFILE_RESULT`.
+/// Returns the `JoinHandle` and a oneshot receiver for the process.
 fn spawn_llamafile_setup(
     status_tx: mpsc::UnboundedSender<crate::llamafile::LlamafileStatus>,
-) -> tokio::task::JoinHandle<()> {
+) -> (
+    tokio::task::JoinHandle<()>,
+    tokio::sync::oneshot::Receiver<crate::llamafile::LlamafileProcess>,
+) {
     let (process_tx, process_rx) = tokio::sync::oneshot::channel();
-    if let Ok(mut guard) = LLAMAFILE_RESULT.lock() {
-        *guard = Some(process_rx);
-    }
 
-    tokio::spawn(async move {
+    let handle = tokio::spawn(async move {
         match crate::llamafile::ensure_llamafile(status_tx.clone()).await {
             Ok(path) => {
                 let _ = status_tx.send(crate::llamafile::LlamafileStatus::Starting);
@@ -1370,7 +1341,9 @@ fn spawn_llamafile_setup(
                 let _ = status_tx.send(crate::llamafile::LlamafileStatus::Error(e));
             }
         }
-    })
+    });
+
+    (handle, process_rx)
 }
 
 /// Clone a `NewGameState` for saving across screen transitions.

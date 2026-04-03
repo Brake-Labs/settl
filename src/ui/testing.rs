@@ -17,6 +17,34 @@ use super::board_view::HexGrid;
 use super::screens::*;
 use super::*;
 
+use crate::game::actions::Action;
+use crate::game::board::{EdgeCoord, EdgeDirection, HexCoord, VertexCoord, VertexDirection};
+use crate::player::PlayerChoice;
+
+/// Build a standard set of test action choices for the ActionBar.
+pub fn test_action_choices() -> Vec<PlayerChoice> {
+    let dummy_v = VertexCoord::new(HexCoord::new(0, 0), VertexDirection::North);
+    let dummy_e = EdgeCoord::new(HexCoord::new(0, 0), EdgeDirection::NorthEast);
+    vec![
+        PlayerChoice::GameAction(Action::BuildSettlement(dummy_v)),
+        PlayerChoice::GameAction(Action::BuildRoad(dummy_e)),
+        PlayerChoice::GameAction(Action::BuyDevCard),
+        PlayerChoice::ProposeTrade,
+        PlayerChoice::GameAction(Action::EndTurn),
+    ]
+}
+
+/// Build a minimal set of test action choices (settlement, road, end turn).
+pub fn test_action_choices_minimal() -> Vec<PlayerChoice> {
+    let dummy_v = VertexCoord::new(HexCoord::new(0, 0), VertexDirection::North);
+    let dummy_e = EdgeCoord::new(HexCoord::new(0, 0), EdgeDirection::NorthEast);
+    vec![
+        PlayerChoice::GameAction(Action::BuildSettlement(dummy_v)),
+        PlayerChoice::GameAction(Action::BuildRoad(dummy_e)),
+        PlayerChoice::GameAction(Action::EndTurn),
+    ]
+}
+
 /// Render an `App` into an in-memory buffer of the given size.
 ///
 /// Uses the same `draw_screen` path as the real event loop, so Playing
@@ -128,13 +156,7 @@ pub fn playing_spectating_app() -> App {
 /// Create an `App` in Playing/ActionBar mode.
 pub fn playing_action_bar_app() -> App {
     let (ps, _rx) = make_test_playing_state(InputMode::ActionBar {
-        choices: vec![
-            "Build Settlement".into(),
-            "Build Road".into(),
-            "Buy Development Card".into(),
-            "Propose Trade".into(),
-            "End Turn".into(),
-        ],
+        choices: test_action_choices(),
         selected: 0,
     });
     make_test_app(Screen::Playing(ps))
@@ -173,6 +195,7 @@ pub fn llamafile_setup_app() -> App {
         status_rx: rx,
         saved_config: NewGameState::new(&[]),
         task_handle: None,
+        process_rx: None,
     };
     make_test_app(Screen::LlamafileSetup(setup))
 }

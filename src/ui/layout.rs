@@ -146,24 +146,21 @@ fn draw_context_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
 
     match &ps.input_mode {
         InputMode::Spectating => {
-            // Show game log messages, respecting scroll position.
-            let n = inner.height as usize;
-            let total = ps.messages.len();
-            // log_scroll is the bottom-most visible line index.
-            // Clamp it so it doesn't go past the end.
-            let max_scroll = total.saturating_sub(1);
-            let scroll_pos = (ps.log_scroll as usize).min(max_scroll);
-            // Show n lines ending at scroll_pos.
-            let end = scroll_pos + 1;
-            let start = end.saturating_sub(n);
-            let recent: Vec<Line> = ps.messages[start..end.min(total)]
+            let lines: Vec<Line> = ps
+                .messages
                 .iter()
                 .map(|m| {
                     let color = game_log::message_color(m);
                     Line::from(Span::styled(m.as_str(), Style::default().fg(color)))
                 })
                 .collect();
-            let para = Paragraph::new(recent).wrap(Wrap { trim: true });
+            let visible = inner.height as usize;
+            let total = lines.len();
+            let max_scroll = total.saturating_sub(visible) as u16;
+            let effective_scroll = ps.log_scroll.min(max_scroll);
+            let para = Paragraph::new(lines)
+                .wrap(Wrap { trim: true })
+                .scroll((effective_scroll, 0));
             f.render_widget(para, inner);
         }
 
@@ -174,19 +171,16 @@ fn draw_context_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
                 if i > 0 {
                     spans.push(Span::raw("  "));
                 }
-                let shortcut = action_shortcut(choice);
+                let label = choice.label();
                 if i == *selected {
                     spans.push(Span::styled(
-                        format!("\u{25b8} {}", choice),
+                        format!("\u{25b8} {}", label),
                         Style::default().fg(Color::Black).bg(Color::Cyan).bold(),
                     ));
                 } else {
-                    spans.push(Span::styled(
-                        choice.clone(),
-                        Style::default().fg(Color::White),
-                    ));
+                    spans.push(Span::styled(label, Style::default().fg(Color::White)));
                 }
-                if let Some(key) = shortcut {
+                if let Some(key) = choice.shortcut_key() {
                     spans.push(Span::styled(
                         format!("[{}]", key),
                         Style::default().fg(Color::DarkGray),
@@ -492,26 +486,6 @@ fn draw_help_overlay(f: &mut Frame, area: Rect) {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
-
-fn action_shortcut(choice: &str) -> Option<char> {
-    if choice.contains("End Turn") {
-        Some('e')
-    } else if choice.contains("Build Settlement") {
-        Some('s')
-    } else if choice.contains("Build Road") {
-        Some('r')
-    } else if choice.contains("Build City") {
-        Some('c')
-    } else if choice.contains("Buy Development") {
-        Some('d')
-    } else if choice.contains("Propose Trade") {
-        Some('t')
-    } else if choice.starts_with("Play ") {
-        Some('p')
-    } else {
-        None
-    }
-}
 
 fn format_resource_counts(counts: &[u32; 5]) -> String {
     let mut parts = Vec::new();
