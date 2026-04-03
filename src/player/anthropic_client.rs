@@ -160,6 +160,206 @@ impl std::fmt::Display for ApiError {
 impl std::error::Error for ApiError {}
 
 // ---------------------------------------------------------------------------
+// SSE stream processor
+// ---------------------------------------------------------------------------
+
+/// Processes Server-Sent Event lines from an Anthropic streaming response,
+/// accumulating content blocks and optionally forwarding text deltas.
+struct SseProcessor {
+    reasoning_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>,
+    content_blocks: Vec<ContentBlock>,
+    response_id: String,
+    response_model: String,
+    stop_reason: Option<String>,
+    usage: Option<Usage>,
+    current_text: String,
+    current_tool_id: String,
+    current_tool_name: String,
+    current_tool_json: String,
+    current_block_type: Option<SseBlockType>,
+    buf: String,
+    current_event_type: String,
+}
+
+#[derive(Clone, Copy)]
+enum SseBlockType {
+    Text,
+    ToolUse,
+}
+
+impl SseProcessor {
+    fn new(reasoning_tx: Option<tokio::sync::mpsc::UnboundedSender<String>>) -> Self {
+        Self {
+            reasoning_tx,
+            content_blocks: Vec::new(),
+            response_id: String::new(),
+            response_model: String::new(),
+            stop_reason: None,
+            usage: None,
+            current_text: String::new(),
+            current_tool_id: String::new(),
+            current_tool_name: String::new(),
+            current_tool_json: String::new(),
+            current_block_type: None,
+            buf: String::new(),
+            current_event_type: String::new(),
+        }
+    }
+
+    /// Feed raw SSE text (may contain partial lines).
+    fn feed(&mut self, data: &str) {
+        self.buf.push_str(data);
+
+        while let Some(line_end) = self.buf.find('\n') {
+            let line = self.buf[..line_end].trim_end_matches('\r').to_string();
+            self.buf = self.buf[line_end + 1..].to_string();
+            self.process_line(&line);
+        }
+    }
+
+    fn process_line(&mut self, line: &str) {
+        if let Some(event_type) = line.strip_prefix("event: ") {
+            self.current_event_type = event_type.to_string();
+        } else if let Some(data) = line.strip_prefix("data: ") {
+            let Ok(json) = serde_json::from_str::<serde_json::Value>(data) else {
+                return;
+            };
+            self.process_event(&json);
+        }
+    }
+
+    fn process_event(&mut self, json: &serde_json::Value) {
+        match self.current_event_type.as_str() {
+            "message_start" => {
+                if let Some(msg) = json.get("message") {
+                    self.response_id = msg
+                        .get("id")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    self.response_model = msg
+                        .get("model")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string();
+                    if let Some(u) = msg.get("usage") {
+                        self.usage = serde_json::from_value(u.clone()).ok();
+                    }
+                }
+            }
+            "content_block_start" => {
+                if let Some(cb) = json.get("content_block") {
+                    let block_type = cb.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                    match block_type {
+                        "text" => {
+                            self.current_block_type = Some(SseBlockType::Text);
+                            self.current_text.clear();
+                            let initial = cb.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                            if !initial.is_empty() {
+                                self.current_text.push_str(initial);
+                                if let Some(tx) = &self.reasoning_tx {
+                                    let _ = tx.send(initial.to_string());
+                                }
+                            }
+                        }
+                        "tool_use" => {
+                            self.current_block_type = Some(SseBlockType::ToolUse);
+                            self.current_tool_id = cb
+                                .get("id")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            self.current_tool_name = cb
+                                .get("name")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("")
+                                .to_string();
+                            self.current_tool_json.clear();
+                        }
+                        _ => {
+                            self.current_block_type = None;
+                        }
+                    }
+                }
+            }
+            "content_block_delta" => {
+                if let Some(delta) = json.get("delta") {
+                    let delta_type = delta.get("type").and_then(|v| v.as_str()).unwrap_or("");
+                    match delta_type {
+                        "text_delta" => {
+                            let text = delta.get("text").and_then(|v| v.as_str()).unwrap_or("");
+                            if !text.is_empty() {
+                                self.current_text.push_str(text);
+                                if let Some(tx) = &self.reasoning_tx {
+                                    let _ = tx.send(text.to_string());
+                                }
+                            }
+                        }
+                        "input_json_delta" => {
+                            let partial = delta
+                                .get("partial_json")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or("");
+                            self.current_tool_json.push_str(partial);
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            "content_block_stop" => match self.current_block_type {
+                Some(SseBlockType::Text) => {
+                    self.content_blocks.push(ContentBlock::Text {
+                        text: std::mem::take(&mut self.current_text),
+                    });
+                    self.current_block_type = None;
+                }
+                Some(SseBlockType::ToolUse) => {
+                    let input: serde_json::Value = serde_json::from_str(&self.current_tool_json)
+                        .unwrap_or(serde_json::Value::Object(Default::default()));
+                    self.content_blocks.push(ContentBlock::ToolUse {
+                        id: std::mem::take(&mut self.current_tool_id),
+                        name: std::mem::take(&mut self.current_tool_name),
+                        input,
+                    });
+                    self.current_tool_json.clear();
+                    self.current_block_type = None;
+                }
+                None => {}
+            },
+            "message_delta" => {
+                if let Some(delta) = json.get("delta") {
+                    self.stop_reason = delta
+                        .get("stop_reason")
+                        .and_then(|v| v.as_str())
+                        .map(|s| s.to_string());
+                }
+                if let Some(u) = json.get("usage") {
+                    if let Ok(u) = serde_json::from_value::<Usage>(u.clone()) {
+                        if let Some(ref mut existing) = self.usage {
+                            existing.output_tokens = u.output_tokens;
+                        } else {
+                            self.usage = Some(u);
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Consume the processor and return the assembled response.
+    fn finish(self) -> MessagesResponse {
+        MessagesResponse {
+            id: self.response_id,
+            content: self.content_blocks,
+            model: self.response_model,
+            stop_reason: self.stop_reason,
+            usage: self.usage,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Client
 // ---------------------------------------------------------------------------
 
@@ -292,184 +492,24 @@ impl AnthropicClient {
             });
         }
 
-        // Parse SSE stream into content blocks.
-        let mut content_blocks: Vec<ContentBlock> = Vec::new();
-        let mut response_id = String::new();
-        let mut response_model = String::new();
-        let mut stop_reason: Option<String> = None;
-        let mut usage: Option<Usage> = None;
-
-        // Per-block accumulators.
-        let mut current_text = String::new();
-        let mut current_tool_id = String::new();
-        let mut current_tool_name = String::new();
-        let mut current_tool_json = String::new();
-        let mut current_block_type: Option<&'static str> = None;
-
-        // SSE line buffer (chunks may split across lines).
-        let mut buf = String::new();
-        let mut current_event_type = String::new();
-
+        let mut processor = SseProcessor::new(reasoning_tx);
         let mut resp = resp;
         while let Some(chunk) = resp.chunk().await.map_err(|e| ApiError {
             status: None,
             message: format!("Stream read error: {}", e),
         })? {
-            buf.push_str(&String::from_utf8_lossy(&chunk));
-
-            while let Some(line_end) = buf.find('\n') {
-                let line = buf[..line_end].trim_end_matches('\r').to_string();
-                buf = buf[line_end + 1..].to_string();
-
-                if let Some(event_type) = line.strip_prefix("event: ") {
-                    current_event_type = event_type.to_string();
-                } else if let Some(data) = line.strip_prefix("data: ") {
-                    let Ok(json) = serde_json::from_str::<serde_json::Value>(data) else {
-                        continue;
-                    };
-
-                    match current_event_type.as_str() {
-                        "message_start" => {
-                            if let Some(msg) = json.get("message") {
-                                response_id = msg
-                                    .get("id")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-                                response_model = msg
-                                    .get("model")
-                                    .and_then(|v| v.as_str())
-                                    .unwrap_or("")
-                                    .to_string();
-                                if let Some(u) = msg.get("usage") {
-                                    usage = serde_json::from_value(u.clone()).ok();
-                                }
-                            }
-                        }
-                        "content_block_start" => {
-                            if let Some(cb) = json.get("content_block") {
-                                let block_type =
-                                    cb.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                                match block_type {
-                                    "text" => {
-                                        current_block_type = Some("text");
-                                        current_text.clear();
-                                        let initial =
-                                            cb.get("text").and_then(|v| v.as_str()).unwrap_or("");
-                                        if !initial.is_empty() {
-                                            current_text.push_str(initial);
-                                            if let Some(tx) = &reasoning_tx {
-                                                let _ = tx.send(initial.to_string());
-                                            }
-                                        }
-                                    }
-                                    "tool_use" => {
-                                        current_block_type = Some("tool_use");
-                                        current_tool_id = cb
-                                            .get("id")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string();
-                                        current_tool_name = cb
-                                            .get("name")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("")
-                                            .to_string();
-                                        current_tool_json.clear();
-                                    }
-                                    _ => {
-                                        current_block_type = None;
-                                    }
-                                }
-                            }
-                        }
-                        "content_block_delta" => {
-                            if let Some(delta) = json.get("delta") {
-                                let delta_type =
-                                    delta.get("type").and_then(|v| v.as_str()).unwrap_or("");
-                                match delta_type {
-                                    "text_delta" => {
-                                        let text = delta
-                                            .get("text")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        if !text.is_empty() {
-                                            current_text.push_str(text);
-                                            if let Some(tx) = &reasoning_tx {
-                                                let _ = tx.send(text.to_string());
-                                            }
-                                        }
-                                    }
-                                    "input_json_delta" => {
-                                        let partial = delta
-                                            .get("partial_json")
-                                            .and_then(|v| v.as_str())
-                                            .unwrap_or("");
-                                        current_tool_json.push_str(partial);
-                                    }
-                                    _ => {}
-                                }
-                            }
-                        }
-                        "content_block_stop" => match current_block_type {
-                            Some("text") => {
-                                content_blocks.push(ContentBlock::Text {
-                                    text: std::mem::take(&mut current_text),
-                                });
-                                current_block_type = None;
-                            }
-                            Some("tool_use") => {
-                                let input: serde_json::Value =
-                                    serde_json::from_str(&current_tool_json)
-                                        .unwrap_or(serde_json::Value::Object(Default::default()));
-                                content_blocks.push(ContentBlock::ToolUse {
-                                    id: std::mem::take(&mut current_tool_id),
-                                    name: std::mem::take(&mut current_tool_name),
-                                    input,
-                                });
-                                current_tool_json.clear();
-                                current_block_type = None;
-                            }
-                            _ => {}
-                        },
-                        "message_delta" => {
-                            if let Some(delta) = json.get("delta") {
-                                stop_reason = delta
-                                    .get("stop_reason")
-                                    .and_then(|v| v.as_str())
-                                    .map(|s| s.to_string());
-                            }
-                            if let Some(u) = json.get("usage") {
-                                if let Ok(u) = serde_json::from_value::<Usage>(u.clone()) {
-                                    // Merge output_tokens from message_delta.
-                                    if let Some(ref mut existing) = usage {
-                                        existing.output_tokens = u.output_tokens;
-                                    } else {
-                                        usage = Some(u);
-                                    }
-                                }
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
+            processor.feed(&String::from_utf8_lossy(&chunk));
         }
 
+        let response = processor.finish();
         log::debug!(
             "AnthropicClient::send_message_streaming done: id={} blocks={} stop={:?}",
-            response_id,
-            content_blocks.len(),
-            stop_reason,
+            response.id,
+            response.content.len(),
+            response.stop_reason,
         );
 
-        Ok(MessagesResponse {
-            id: response_id,
-            content: content_blocks,
-            model: response_model,
-            stop_reason,
-            usage,
-        })
+        Ok(response)
     }
 
     /// Extract the first tool call matching `name` from a response.
@@ -677,5 +717,76 @@ mod tests {
     fn client_constructor() {
         let client = AnthropicClient::new("http://localhost:8080", "test-key", "test-model");
         assert_eq!(client.model(), "test-model");
+    }
+
+    #[test]
+    fn sse_processor_assembles_text_and_tool_use() {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let mut proc = SseProcessor::new(Some(tx));
+
+        // Simulate a typical streaming response with text reasoning + tool call.
+        proc.feed("event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg-123\",\"model\":\"claude\",\"usage\":{\"input_tokens\":10,\"output_tokens\":0}}}\n\n");
+        proc.feed("event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\n");
+        proc.feed("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"I choose \"}}\n\n");
+        proc.feed("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"option 2.\"}}\n\n");
+        proc.feed(
+            "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+        );
+        proc.feed("event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"tool_use\",\"id\":\"tu-1\",\"name\":\"choose_index\"}}\n\n");
+        proc.feed("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"index\\\"\"}}\n\n");
+        proc.feed("event: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":1,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\": 2}\"}}\n\n");
+        proc.feed(
+            "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":1}\n\n",
+        );
+        proc.feed("event: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\"},\"usage\":{\"output_tokens\":50}}\n\n");
+        proc.feed("event: message_stop\ndata: {\"type\":\"message_stop\"}\n\n");
+
+        let response = proc.finish();
+        assert_eq!(response.id, "msg-123");
+        assert_eq!(response.model, "claude");
+        assert_eq!(response.stop_reason.as_deref(), Some("tool_use"));
+        assert_eq!(response.content.len(), 2);
+
+        // Verify text block.
+        match &response.content[0] {
+            ContentBlock::Text { text } => assert_eq!(text, "I choose option 2."),
+            other => panic!("expected Text, got {:?}", other),
+        }
+
+        // Verify tool use block.
+        match &response.content[1] {
+            ContentBlock::ToolUse { id, name, input } => {
+                assert_eq!(id, "tu-1");
+                assert_eq!(name, "choose_index");
+                assert_eq!(input["index"], 2);
+            }
+            other => panic!("expected ToolUse, got {:?}", other),
+        }
+
+        // Verify text deltas were sent through the channel.
+        let mut chunks = Vec::new();
+        while let Ok(chunk) = rx.try_recv() {
+            chunks.push(chunk);
+        }
+        assert_eq!(chunks, vec!["I choose ", "option 2."]);
+    }
+
+    #[test]
+    fn sse_processor_handles_partial_lines() {
+        let mut proc = SseProcessor::new(None);
+
+        // Feed data split across chunk boundaries.
+        proc.feed("event: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_del");
+        proc.feed("ta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"hello\"}}\n\n");
+        proc.feed(
+            "event: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\n",
+        );
+
+        let response = proc.finish();
+        assert_eq!(response.content.len(), 1);
+        match &response.content[0] {
+            ContentBlock::Text { text } => assert_eq!(text, "hello"),
+            other => panic!("expected Text, got {:?}", other),
+        }
     }
 }

@@ -16,8 +16,10 @@ use crate::player::{Player, PlayerChoice};
 use crate::trading;
 use crate::ui::UiEvent;
 
-/// Default timeout for LLM/player decisions (60 seconds).
-const PLAYER_DECISION_TIMEOUT: Duration = Duration::from_secs(60);
+/// Default timeout for player decisions. Set high (5 minutes) to accommodate
+/// streaming LLM responses with large max_tokens. The human can watch reasoning
+/// stream progressively, so long wait times feel productive rather than stuck.
+const PLAYER_DECISION_TIMEOUT: Duration = Duration::from_secs(300);
 
 /// Errors that can occur during game orchestration.
 #[derive(Debug)]

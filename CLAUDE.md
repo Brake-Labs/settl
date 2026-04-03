@@ -95,6 +95,15 @@ cargo test ui::snapshot_tests           # Visual snapshot tests (15 tests)
 cargo insta review                      # Review snapshot diffs after UI changes
 ```
 
+## Testing with Llamafile
+
+The llamafile AI server can be downloaded and run inside the sandbox. **Always test AI/LLM player changes end-to-end** by running the game with llamafile, not just unit tests. Unit tests don't exercise the real API/streaming path and will miss issues like timeout mismatches, SSE parsing bugs, or broken channel wiring.
+
+```bash
+cargo run -- --demo          # Run a headless game with llamafile AI players
+cargo run                    # Launch TUI and set up a game with AI opponents
+```
+
 ## Commits & PRs
 
 - Branch names: `feature/...`, `fix/...`, `docs/...`, `refactor/...`.
