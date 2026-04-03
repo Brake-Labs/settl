@@ -152,6 +152,7 @@ pub trait Player: Send + Sync {
         state: &GameState,
         player_id: PlayerId,
         targets: &[PlayerId],
+        player_names: &[String],
     ) -> (usize, String);
 
     /// Choose which cards to discard (when holding >7 cards on a 7-roll).
@@ -185,6 +186,7 @@ pub trait Player: Send + Sync {
         state: &GameState,
         player_id: PlayerId,
         offer: &TradeOffer,
+        player_names: &[String],
     ) -> (TradeResponse, String);
 
     /// Provide extra game context (recent history, trade log) for the player's

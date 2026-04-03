@@ -87,8 +87,7 @@ pub async fn run(cli: HeadlessCli) {
                 "\nFinal scores: {}",
                 (0..cli.players)
                     .map(|p| format!(
-                        "Player {} ({}): {} VP",
-                        p,
+                        "{}: {} VP",
                         orchestrator.player_names[p],
                         orchestrator.state.victory_points(p)
                     ))

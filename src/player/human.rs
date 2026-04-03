@@ -76,7 +76,7 @@ impl Player for HumanPlayer {
         choices: &[PlayerChoice],
     ) -> (usize, String) {
         println!("\n{}", prompt::ascii_board(&state.board));
-        println!("\n--- Your Turn (Player {}: {}) ---", player_id, self.name);
+        println!("\n--- Your Turn ({}) ---", self.name);
 
         let ps = &state.players[player_id];
         println!(
@@ -101,10 +101,7 @@ impl Player for HumanPlayer {
         player_id: PlayerId,
         legal_vertices: &[VertexCoord],
     ) -> (usize, String) {
-        println!(
-            "\n--- Place Settlement (Player {}: {}) ---",
-            player_id, self.name
-        );
+        println!("\n--- Place Settlement ({}) ---", self.name);
         println!("Legal locations:");
         for (i, v) in legal_vertices.iter().enumerate() {
             let dir = match v.dir {
@@ -124,7 +121,7 @@ impl Player for HumanPlayer {
         player_id: PlayerId,
         legal_edges: &[EdgeCoord],
     ) -> (usize, String) {
-        println!("\n--- Place Road (Player {}: {}) ---", player_id, self.name);
+        println!("\n--- Place Road ({}) ---", self.name);
         println!("Legal locations:");
         for (i, e) in legal_edges.iter().enumerate() {
             println!("  {}. {}", i, e);
@@ -140,10 +137,7 @@ impl Player for HumanPlayer {
         player_id: PlayerId,
         legal_hexes: &[HexCoord],
     ) -> (usize, String) {
-        println!(
-            "\n--- Move Robber (Player {}: {}) ---",
-            player_id, self.name
-        );
+        println!("\n--- Move Robber ({}) ---", self.name);
         println!("{}", prompt::format_hex_options(legal_hexes));
 
         let idx = Self::read_index(legal_hexes.len());
@@ -155,13 +149,16 @@ impl Player for HumanPlayer {
         state: &GameState,
         player_id: PlayerId,
         targets: &[PlayerId],
+        player_names: &[String],
     ) -> (usize, String) {
-        println!("\n--- Steal From (Player {}: {}) ---", player_id, self.name);
+        let name =
+            |p: PlayerId| -> &str { player_names.get(p).map(|s| s.as_str()).unwrap_or("???") };
+        println!("\n--- Steal From ({}) ---", self.name);
         for (i, &p) in targets.iter().enumerate() {
             println!(
-                "  {}. Player {} ({} cards)",
+                "  {}. {} ({} cards)",
                 i,
-                p,
+                name(p),
                 state.players[p].total_resources()
             );
         }
@@ -177,10 +174,7 @@ impl Player for HumanPlayer {
         count: usize,
     ) -> (Vec<Resource>, String) {
         let ps = &state.players[player_id];
-        println!(
-            "\n--- Discard {} Cards (Player {}: {}) ---",
-            count, player_id, self.name
-        );
+        println!("\n--- Discard {} Cards ({}) ---", count, self.name);
         println!(
             "Your hand: Wood:{} Brick:{} Sheep:{} Wheat:{} Ore:{}",
             ps.resource_count(Resource::Wood),
@@ -215,10 +209,7 @@ impl Player for HumanPlayer {
         player_id: PlayerId,
     ) -> Option<(TradeOffer, String)> {
         let ps = &state.players[player_id];
-        println!(
-            "\n--- Propose Trade (Player {}: {}) ---",
-            player_id, self.name
-        );
+        println!("\n--- Propose Trade ({}) ---", self.name);
         println!(
             "Your hand: Wood:{} Brick:{} Sheep:{} Wheat:{} Ore:{}",
             ps.resource_count(Resource::Wood),
@@ -262,6 +253,7 @@ impl Player for HumanPlayer {
         _state: &GameState,
         player_id: PlayerId,
         offer: &TradeOffer,
+        player_names: &[String],
     ) -> (TradeResponse, String) {
         let offering: String = offer
             .offering
@@ -276,12 +268,13 @@ impl Player for HumanPlayer {
             .collect::<Vec<_>>()
             .join(", ");
 
-        println!(
-            "\n--- Trade Offer (Player {}: {}) ---",
-            player_id, self.name
-        );
-        println!("Player {} offers: {}", offer.from, offering);
-        println!("Player {} wants: {}", offer.from, requesting);
+        let from_name = player_names
+            .get(offer.from)
+            .map(|s| s.as_str())
+            .unwrap_or("???");
+        println!("\n--- Trade Offer ({}) ---", self.name);
+        println!("{} offers: {}", from_name, offering);
+        println!("{} wants: {}", from_name, requesting);
         if !offer.message.is_empty() {
             println!("Message: \"{}\"", offer.message);
         }

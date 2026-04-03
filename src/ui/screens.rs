@@ -61,7 +61,7 @@ pub struct PlayerConfig {
     pub personality_index: usize,
 }
 
-const DEFAULT_NAMES: &[&str] = &["Alice", "Bob", "Charlie", "Diana"];
+const DEFAULT_NAMES: &[&str] = &["Marco", "Leif", "Vasco"];
 
 /// Which column is focused in the player table.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -130,7 +130,7 @@ impl NewGameState {
                     }
                 } else {
                     PlayerConfig {
-                        name: DEFAULT_NAMES[i].into(),
+                        name: DEFAULT_NAMES[i - 1].into(),
                         kind: PlayerKind::Llamafile,
                         personality_index: i.min(personality_names.len().saturating_sub(1)),
                     }
@@ -155,9 +155,10 @@ impl NewGameState {
 
     pub fn add_player(&mut self) {
         if self.players.len() < 4 {
-            let i = self.players.len();
+            let ai_index = self.players.len() - 1; // first player is human
+            let name = DEFAULT_NAMES.get(ai_index).copied().unwrap_or("AI");
             self.players.push(PlayerConfig {
-                name: DEFAULT_NAMES[i].into(),
+                name: name.into(),
                 kind: PlayerKind::Llamafile,
                 personality_index: 0,
             });

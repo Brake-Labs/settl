@@ -401,10 +401,7 @@ impl PlayingState {
                     .get(winner)
                     .cloned()
                     .unwrap_or_else(|| "?".into());
-                self.push_message(format!(
-                    "GAME OVER: Player {} ({}) wins!",
-                    winner, winner_name,
-                ));
+                self.push_message(format!("GAME OVER: {} wins!", winner_name));
                 self.push_message(message.clone());
                 self.game_over = true;
                 self.game_over_winner = Some((winner, winner_name));

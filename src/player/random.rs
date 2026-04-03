@@ -71,6 +71,7 @@ impl Player for RandomPlayer {
         _state: &GameState,
         _player_id: PlayerId,
         targets: &[PlayerId],
+        _player_names: &[String],
     ) -> (usize, String) {
         let idx = rand::rng().random_range(0..targets.len());
         (idx, "[random steal]".into())
@@ -154,6 +155,7 @@ impl Player for RandomPlayer {
         state: &GameState,
         player_id: PlayerId,
         offer: &TradeOffer,
+        _player_names: &[String],
     ) -> (TradeResponse, String) {
         // Use the trade value heuristic to make smarter decisions.
         let ps = &state.players[player_id];
@@ -209,9 +211,9 @@ mod tests {
                     "Game should have recorded events"
                 );
                 println!(
-                    "Game finished in {} turns. Winner: Player {} with {} VP",
+                    "Game finished in {} turns. Winner: {} with {} VP",
                     orchestrator.state.turn_number,
-                    winner,
+                    orchestrator.player_names[winner],
                     orchestrator.state.victory_points(winner)
                 );
             }
