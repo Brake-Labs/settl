@@ -42,6 +42,22 @@ const UPPER_HALF: char = '\u{2580}';
 /// Lower half-block for sub-pixel compositing.
 const LOWER_HALF: char = '\u{2584}';
 
+/// Half-widths for the 7-row hex fill diamond (cy-3 to cy+3).
+const HEX_FILL_HALF_WIDTHS: [i16; 7] = [4, 6, 7, 8, 7, 6, 4];
+
+/// Darken a color to ~60% brightness for terrain-tinted hex edges.
+fn darken_color(c: Color) -> Color {
+    match c {
+        Color::Rgb(r, g, b) => Color::Rgb(
+            (r as u16 * 3 / 5) as u8,
+            (g as u16 * 3 / 5) as u8,
+            (b as u16 * 3 / 5) as u8,
+        ),
+        Color::Red => Color::Rgb(150, 0, 0),
+        _ => Color::DarkGray,
+    }
+}
+
 // ── HexGrid ─────────────────────────────────────────────────────────
 
 /// Precomputed screen positions for all hex elements.
@@ -263,13 +279,32 @@ impl SubPixelCanvas {
 /// Uses a 7-row diamond shape with widths tuned to leave a 2-row gap between
 /// the fill edge and vertex positions (where settlements and roads live).
 fn draw_hex_cell_fill(cx: i16, cy: i16, fill: Style, area: Rect, buf: &mut Buffer) {
-    // Half-widths per row: 4, 6, 7, 8, 7, 6, 4  (cy-3 to cy+3)
-    const HALF_WIDTHS: [i16; 7] = [4, 6, 7, 8, 7, 6, 4];
-    for (i, &hw) in HALF_WIDTHS.iter().enumerate() {
+    for (i, &hw) in HEX_FILL_HALF_WIDTHS.iter().enumerate() {
         let dy = i as i16 - 3;
         for dx in -hw..=hw {
             set_cell(cx + dx, cy + dy, ' ', fill, area, buf);
         }
+    }
+}
+
+/// Draw diagonal edge outlines on a hex using ╱╲ line-drawing characters.
+/// Creates terrain-tinted edges: darkened terrain foreground on terrain background.
+fn draw_hex_edges(cx: i16, cy: i16, bg: Color, area: Rect, buf: &mut Buffer) {
+    let fg = darken_color(bg);
+    let style = Style::default().fg(fg).bg(bg);
+
+    // Upper diagonals (cy-3 to cy-1): ╱ left, ╲ right
+    for (i, &hw) in HEX_FILL_HALF_WIDTHS.iter().enumerate().take(3) {
+        let dy = i as i16 - 3;
+        set_cell(cx - hw, cy + dy, '╱', style, area, buf);
+        set_cell(cx + hw, cy + dy, '╲', style, area, buf);
+    }
+
+    // Lower diagonals (cy+1 to cy+3): ╲ left, ╱ right
+    for (i, &hw) in HEX_FILL_HALF_WIDTHS.iter().enumerate().skip(4) {
+        let dy = i as i16 - 3;
+        set_cell(cx - hw, cy + dy, '╲', style, area, buf);
+        set_cell(cx + hw, cy + dy, '╱', style, area, buf);
     }
 }
 
@@ -395,6 +430,7 @@ pub fn render_board(
                 terrain_color(hex.terrain)
             };
             draw_hex_cell_fill(scr_col, scr_row, Style::default().bg(fill_bg), inner, buf);
+            draw_hex_edges(scr_col, scr_row, fill_bg, inner, buf);
         }
     }
 
