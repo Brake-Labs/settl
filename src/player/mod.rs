@@ -30,6 +30,12 @@ pub enum PlayerChoice {
     PlayRoadBuilding,
     /// Intent to propose a trade — offer details collected separately.
     ProposeTrade,
+    /// Intent to build a road — edge collected via board cursor.
+    BuildRoadIntent,
+    /// Intent to build a settlement — vertex collected via board cursor.
+    BuildSettlementIntent,
+    /// Intent to build a city — vertex collected via board cursor.
+    BuildCityIntent,
 }
 
 impl PlayerChoice {
@@ -49,6 +55,9 @@ impl PlayerChoice {
             PlayerChoice::PlayYearOfPlenty => "Play Year of Plenty",
             PlayerChoice::PlayRoadBuilding => "Play Road Building",
             PlayerChoice::ProposeTrade => "Propose Trade",
+            PlayerChoice::BuildRoadIntent => "Build Road",
+            PlayerChoice::BuildSettlementIntent => "Build Settlement",
+            PlayerChoice::BuildCityIntent => "Build City",
         }
     }
 
@@ -65,6 +74,9 @@ impl PlayerChoice {
             | PlayerChoice::PlayMonopoly
             | PlayerChoice::PlayYearOfPlenty
             | PlayerChoice::PlayRoadBuilding => Some('p'),
+            PlayerChoice::BuildRoadIntent => Some('r'),
+            PlayerChoice::BuildSettlementIntent => Some('s'),
+            PlayerChoice::BuildCityIntent => Some('c'),
             _ => None,
         }
     }
@@ -95,6 +107,9 @@ impl std::fmt::Display for PlayerChoice {
             PlayerChoice::PlayYearOfPlenty => write!(f, "Play Year of Plenty"),
             PlayerChoice::PlayRoadBuilding => write!(f, "Play Road Building"),
             PlayerChoice::ProposeTrade => write!(f, "Propose Trade"),
+            PlayerChoice::BuildRoadIntent => write!(f, "Build Road"),
+            PlayerChoice::BuildSettlementIntent => write!(f, "Build Settlement"),
+            PlayerChoice::BuildCityIntent => write!(f, "Build City"),
         }
     }
 }

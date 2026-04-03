@@ -271,9 +271,12 @@ async fn setup_phase_completes_with_human_player() {
 
     // The human player (player 0) is at positions 0 and 7 in the snake draft
     // [0,1,2,3,3,2,1,0]. Each position gets a PlaceSettlement + PlaceRoad prompt.
-    // So the human should receive exactly 4 setup prompts.
+    // So the human should receive exactly 4 setup prompts before gameplay begins.
+    // (PlaceRoad also appears during gameplay for build-road intents, so we only
+    // count prompts before the first ChooseAction.)
     let setup_prompts: Vec<&String> = prompt_log
         .iter()
+        .take_while(|p| *p != "ChooseAction")
         .filter(|p| *p == "PlaceSettlement" || *p == "PlaceRoad")
         .collect();
     assert_eq!(
