@@ -154,6 +154,7 @@ impl Player for TuiHumanPlayer {
         player_id: PlayerId,
         legal_vertices: &[VertexCoord],
         _round: u8,
+        _player_names: &[String],
     ) -> (usize, String) {
         let max = legal_vertices.len().saturating_sub(1);
         let idx = self
@@ -173,6 +174,7 @@ impl Player for TuiHumanPlayer {
         _state: &GameState,
         player_id: PlayerId,
         legal_edges: &[EdgeCoord],
+        _player_names: &[String],
     ) -> (usize, String) {
         let max = legal_edges.len().saturating_sub(1);
         let idx = self
@@ -211,17 +213,16 @@ impl Player for TuiHumanPlayer {
         state: &GameState,
         player_id: PlayerId,
         targets: &[PlayerId],
+        player_names: &[String],
     ) -> (usize, String) {
+        let name =
+            |p: PlayerId| -> &str { player_names.get(p).map(|s| s.as_str()).unwrap_or("???") };
         let target_info: Vec<(PlayerId, String)> = targets
             .iter()
             .map(|&p| {
                 (
                     p,
-                    format!(
-                        "Player {} ({} cards)",
-                        p,
-                        state.players[p].total_resources()
-                    ),
+                    format!("{} ({} cards)", name(p), state.players[p].total_resources()),
                 )
             })
             .collect();
@@ -321,6 +322,7 @@ impl Player for TuiHumanPlayer {
         _state: &GameState,
         player_id: PlayerId,
         offer: &TradeOffer,
+        _player_names: &[String],
     ) -> (TradeResponse, String) {
         let response = self
             .send_prompt(

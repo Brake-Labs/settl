@@ -139,10 +139,7 @@ impl GameOrchestrator {
 
             if let Some(winner) = self.run_turn().await? {
                 let vp = self.state.victory_points(winner);
-                let msg = format!(
-                    "Player {} ({}) wins with {} VP!",
-                    winner, self.player_names[winner], vp
-                );
+                let msg = format!("{} wins with {} VP!", self.player_names[winner], vp);
                 self.record_event(GameEvent::GameWon {
                     player: winner,
                     final_vp: vp,
@@ -182,6 +179,7 @@ impl GameOrchestrator {
                         player_id,
                         &legal_vertices,
                         round,
+                        &self.player_names,
                     ),
                     (0, "timeout fallback".into()),
                 )
@@ -201,7 +199,12 @@ impl GameOrchestrator {
 
             let (e_idx, _e_reasoning) = self
                 .with_timeout(
-                    self.players[player_id].choose_road(&self.state, player_id, &legal_edges),
+                    self.players[player_id].choose_road(
+                        &self.state,
+                        player_id,
+                        &legal_edges,
+                        &self.player_names,
+                    ),
                     (0, "timeout fallback".into()),
                 )
                 .await;
@@ -327,7 +330,13 @@ impl GameOrchestrator {
 
             match action_result {
                 Ok(()) => {
-                    self.send_ui(format!("P{}: {} — {}", player_id, choice, reasoning), None);
+                    self.send_ui(
+                        format!(
+                            "{}: {} — {}",
+                            self.player_names[player_id], choice, reasoning
+                        ),
+                        None,
+                    );
                     if let Some(winner) = rules::check_victory(&self.state) {
                         return Ok(Some(winner));
                     }
@@ -462,7 +471,12 @@ impl GameOrchestrator {
             if !targets.is_empty() {
                 let (t_idx, _t_reasoning) = self
                     .with_timeout(
-                        self.players[roller].choose_steal_target(&self.state, roller, &targets),
+                        self.players[roller].choose_steal_target(
+                            &self.state,
+                            roller,
+                            &targets,
+                            &self.player_names,
+                        ),
                         (0, "timeout fallback".into()),
                     )
                     .await;
@@ -589,7 +603,12 @@ impl GameOrchestrator {
         } else {
             let (t_idx, _) = self
                 .with_timeout(
-                    self.players[player_id].choose_steal_target(&self.state, player_id, &targets),
+                    self.players[player_id].choose_steal_target(
+                        &self.state,
+                        player_id,
+                        &targets,
+                        &self.player_names,
+                    ),
                     (0, "timeout fallback".into()),
                 )
                 .await;
@@ -667,7 +686,12 @@ impl GameOrchestrator {
 
         let (e1_idx, _) = self
             .with_timeout(
-                self.players[player_id].choose_road(&self.state, player_id, &legal_edges_1),
+                self.players[player_id].choose_road(
+                    &self.state,
+                    player_id,
+                    &legal_edges_1,
+                    &self.player_names,
+                ),
                 (0, "timeout fallback".into()),
             )
             .await;
@@ -688,7 +712,12 @@ impl GameOrchestrator {
         } else {
             let (e2_idx, _) = self
                 .with_timeout(
-                    self.players[player_id].choose_road(&self.state, player_id, &legal_edges_2),
+                    self.players[player_id].choose_road(
+                        &self.state,
+                        player_id,
+                        &legal_edges_2,
+                        &self.player_names,
+                    ),
                     (0, "timeout fallback".into()),
                 )
                 .await;
@@ -768,7 +797,12 @@ impl GameOrchestrator {
 
             let (response, resp_reasoning) = self
                 .with_timeout(
-                    self.players[other_id].respond_to_trade(&self.state, other_id, &offer),
+                    self.players[other_id].respond_to_trade(
+                        &self.state,
+                        other_id,
+                        &offer,
+                        &self.player_names,
+                    ),
                     (
                         TradeResponse::Reject {
                             reason: "timeout".into(),
@@ -838,6 +872,7 @@ impl GameOrchestrator {
                                 &self.state,
                                 player_id,
                                 &counter_offer,
+                                &self.player_names,
                             ),
                             (
                                 TradeResponse::Reject {

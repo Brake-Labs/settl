@@ -32,7 +32,7 @@ pub fn render_players(state: &GameState, player_names: &[String], area: Rect, bu
         let marker = if is_current { "\u{25b8}" } else { " " };
         lines.push(Line::from(vec![
             Span::styled(
-                format!("{}P{} {} ", marker, i, name),
+                format!("{}{} ", marker, name),
                 Style::default().fg(color).bold(),
             ),
             Span::styled(

@@ -127,6 +127,7 @@ pub trait Player: Send + Sync {
         player_id: PlayerId,
         legal_vertices: &[VertexCoord],
         round: u8,
+        player_names: &[String],
     ) -> (usize, String);
 
     /// Choose an edge to place a road.
@@ -136,6 +137,7 @@ pub trait Player: Send + Sync {
         state: &GameState,
         player_id: PlayerId,
         legal_edges: &[EdgeCoord],
+        player_names: &[String],
     ) -> (usize, String);
 
     /// Choose a hex to move the robber to (after rolling 7 or playing Knight).
@@ -154,6 +156,7 @@ pub trait Player: Send + Sync {
         state: &GameState,
         player_id: PlayerId,
         targets: &[PlayerId],
+        player_names: &[String],
     ) -> (usize, String);
 
     /// Choose which cards to discard (when holding >7 cards on a 7-roll).
@@ -187,6 +190,7 @@ pub trait Player: Send + Sync {
         state: &GameState,
         player_id: PlayerId,
         offer: &TradeOffer,
+        player_names: &[String],
     ) -> (TradeResponse, String);
 
     /// Provide extra game context (recent history, trade log) for the player's

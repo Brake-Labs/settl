@@ -343,7 +343,7 @@ impl Player for LlamafilePlayer {
         let system = self.system_prompt();
         let extra = self.extra_context.lock().await;
         let user = if extra.is_empty() {
-            prompt::turn_prompt(state, player_id, choices)
+            prompt::turn_prompt(state, player_id, choices, &self.name)
         } else {
             let board_ascii = prompt::ascii_board(&state.board);
             let state_json = prompt::game_state_json(state, player_id);
@@ -351,9 +351,10 @@ impl Player for LlamafilePlayer {
                 "BOARD:\n{board_ascii}\n\n\
                  GAME STATE:\n{state_json}\n\n\
                  {extra}\n\n\
-                 You are Player {player_id}.\n\n\
+                 You are {player_name}.\n\n\
                  LEGAL ACTIONS:\n{choices}\n\n\
                  Choose your action by calling the choose_action tool.",
+                player_name = self.name,
                 choices = prompt::format_choices(choices),
             )
         };
@@ -379,11 +380,12 @@ impl Player for LlamafilePlayer {
         player_id: PlayerId,
         legal_vertices: &[VertexCoord],
         round: u8,
+        player_names: &[String],
     ) -> (usize, String) {
         let system = self.system_prompt();
         let strategy = self.personality.setup_strategy_text();
-        let names: Vec<String> = (0..state.num_players).map(|i| format!("P{}", i)).collect();
-        let user = prompt::setup_settlement_prompt(state, player_id, round, legal_vertices, &names);
+        let user =
+            prompt::setup_settlement_prompt(state, player_id, round, legal_vertices, player_names);
         let user = format!("SETUP STRATEGY:\n{strategy}\n\n{user}",);
         let tool = Self::index_tool(legal_vertices.len());
 
@@ -405,9 +407,10 @@ impl Player for LlamafilePlayer {
         state: &GameState,
         player_id: PlayerId,
         legal_edges: &[EdgeCoord],
+        player_names: &[String],
     ) -> (usize, String) {
         let system = self.system_prompt();
-        let user = prompt::setup_road_prompt(state, player_id, legal_edges);
+        let user = prompt::setup_road_prompt(state, player_id, legal_edges, player_names);
         let tool = Self::index_tool(legal_edges.len());
 
         match self.call_with_retry(&system, &user, tool).await {
@@ -457,16 +460,19 @@ impl Player for LlamafilePlayer {
         state: &GameState,
         _player_id: PlayerId,
         targets: &[PlayerId],
+        player_names: &[String],
     ) -> (usize, String) {
+        let name =
+            |p: PlayerId| -> &str { player_names.get(p).map(|s| s.as_str()).unwrap_or("???") };
         let system = self.system_prompt();
         let target_list: String = targets
             .iter()
             .enumerate()
             .map(|(i, &p)| {
                 format!(
-                    "  {}. Player {} ({} resource cards)",
+                    "  {}. {} ({} resource cards)",
                     i,
-                    p,
+                    name(p),
                     state.players[p].total_resources()
                 )
             })
@@ -638,7 +644,12 @@ impl Player for LlamafilePlayer {
         state: &GameState,
         player_id: PlayerId,
         offer: &TradeOffer,
+        player_names: &[String],
     ) -> (TradeResponse, String) {
+        let from_name = player_names
+            .get(offer.from)
+            .map(|s| s.as_str())
+            .unwrap_or("???");
         let system = self.system_prompt();
         let state_json = prompt::game_state_json(state, player_id);
         let offering: String = offer
@@ -655,12 +666,12 @@ impl Player for LlamafilePlayer {
             .join(", ");
         let user = format!(
             "GAME STATE:\n{state_json}\n\n\
-             Player {} offers a trade:\n\
+             {from_name} offers a trade:\n\
              They give: {}\n\
              They want: {}\n\
              Message: \"{}\"\n\n\
              Choose by calling the respond_to_trade tool.",
-            offer.from, offering, requesting, offer.message,
+            offering, requesting, offer.message,
         );
         let tool = Self::trade_response_tool();
 

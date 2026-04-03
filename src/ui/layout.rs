@@ -349,7 +349,13 @@ fn draw_context_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
                 .join(", ");
             let lines = vec![
                 Line::from(Span::styled(
-                    format!(" Trade offer from Player {}", offer.from),
+                    format!(
+                        " Trade offer from {}",
+                        ps.player_names
+                            .get(offer.from)
+                            .map(|s| s.as_str())
+                            .unwrap_or("???")
+                    ),
                     Style::default().fg(Color::Yellow).bold(),
                 )),
                 Line::from(vec![

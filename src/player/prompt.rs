@@ -225,9 +225,24 @@ pub fn format_recent_history(
     format!("RECENT HISTORY:\n{}", lines.join("\n"))
 }
 
-/// Build the turn prompt with board state, recent history, and choices.
-pub fn turn_prompt(state: &GameState, player_id: PlayerId, choices: &[PlayerChoice]) -> String {
-    turn_prompt_with_history(state, player_id, choices, &[], &[])
+/// Build the turn prompt with board state and choices (no history).
+pub fn turn_prompt(
+    state: &GameState,
+    player_id: PlayerId,
+    choices: &[PlayerChoice],
+    player_name: &str,
+) -> String {
+    let board_ascii = ascii_board(&state.board);
+    let state_json = game_state_json(state, player_id);
+
+    format!(
+        "BOARD:\n{board_ascii}\n\n\
+         GAME STATE:\n{state_json}\n\n\
+         You are {player_name}.\n\n\
+         LEGAL ACTIONS:\n{choices}\n\n\
+         Choose your action by calling the choose_action tool.",
+        choices = format_choices(choices),
+    )
 }
 
 /// Build the turn prompt with board state, recent history, and choices.
@@ -251,9 +266,13 @@ pub fn turn_prompt_with_history(
     format!(
         "BOARD:\n{board_ascii}\n\n\
          GAME STATE:\n{state_json}\n{history_section}\n\
-         You are Player {player_id}.\n\n\
+         You are {player_name}.\n\n\
          LEGAL ACTIONS:\n{choices}\n\n\
          Choose your action by calling the choose_action tool.",
+        player_name = player_names
+            .get(player_id)
+            .map(|s| s.as_str())
+            .unwrap_or("???"),
         choices = format_choices(choices),
     )
 }
@@ -414,13 +433,17 @@ pub fn setup_settlement_prompt(
     format!(
         "BOARD:\n{board_ascii}\n\n\
          SETUP PHASE -- Round {round}\n\
-         You are Player {player_id}. Place your settlement.\n\
+         You are {player_name}. Place your settlement.\n\
          {round_hint}\n\n\
          VERTEX KEY: index. (q,r,dir) | resources | pips=probability | expand=open_adjacent_spots | port | nearby_opponents | your_buildings\n\
          - pips: total probability dots (higher=more production, max 5 per hex for 6/8)\n\
          - expand: number of adjacent vertices where you could later build (satisfying distance rule)\n\n\
          LEGAL SETTLEMENT LOCATIONS:\n{vertex_list}\n\n\
          Choose by calling the choose_index tool.",
+        player_name = player_names
+            .get(player_id)
+            .map(|s| s.as_str())
+            .unwrap_or("???"),
         round_hint = if round == 2 {
             "This is your second settlement. You'll receive one of each adjacent resource."
         } else {
@@ -434,6 +457,7 @@ pub fn setup_road_prompt(
     state: &GameState,
     player_id: PlayerId,
     legal_edges: &[crate::game::board::EdgeCoord],
+    player_names: &[String],
 ) -> String {
     let board_ascii = ascii_board(&state.board);
 
@@ -446,10 +470,14 @@ pub fn setup_road_prompt(
 
     format!(
         "BOARD:\n{board_ascii}\n\n\
-         SETUP PHASE — Place your road.\n\
-         You are Player {player_id}.\n\n\
+         SETUP PHASE -- Place your road.\n\
+         You are {player_name}.\n\n\
          LEGAL ROAD LOCATIONS:\n{edge_list}\n\n\
          Choose by calling the choose_index tool.",
+        player_name = player_names
+            .get(player_id)
+            .map(|s| s.as_str())
+            .unwrap_or("???"),
     )
 }
 
