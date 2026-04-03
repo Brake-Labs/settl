@@ -161,7 +161,7 @@ impl GameOrchestrator {
         let total_placements = setup_order.len();
 
         for (idx, &player_id) in setup_order.iter().enumerate() {
-            let _round = if idx < total_placements / 2 { 1 } else { 2 };
+            let round: u8 = if idx < total_placements / 2 { 1 } else { 2 };
 
             // Step 1: Choose settlement location.
             let legal_vertices = rules::legal_setup_vertices(&self.state);
@@ -178,6 +178,8 @@ impl GameOrchestrator {
                         &self.state,
                         player_id,
                         &legal_vertices,
+                        round,
+                        &self.player_names,
                     ),
                     (0, "timeout fallback".into()),
                 )
@@ -197,7 +199,12 @@ impl GameOrchestrator {
 
             let (e_idx, _e_reasoning) = self
                 .with_timeout(
-                    self.players[player_id].choose_road(&self.state, player_id, &legal_edges),
+                    self.players[player_id].choose_road(
+                        &self.state,
+                        player_id,
+                        &legal_edges,
+                        &self.player_names,
+                    ),
                     (0, "timeout fallback".into()),
                 )
                 .await;
@@ -679,7 +686,12 @@ impl GameOrchestrator {
 
         let (e1_idx, _) = self
             .with_timeout(
-                self.players[player_id].choose_road(&self.state, player_id, &legal_edges_1),
+                self.players[player_id].choose_road(
+                    &self.state,
+                    player_id,
+                    &legal_edges_1,
+                    &self.player_names,
+                ),
                 (0, "timeout fallback".into()),
             )
             .await;
@@ -700,7 +712,12 @@ impl GameOrchestrator {
         } else {
             let (e2_idx, _) = self
                 .with_timeout(
-                    self.players[player_id].choose_road(&self.state, player_id, &legal_edges_2),
+                    self.players[player_id].choose_road(
+                        &self.state,
+                        player_id,
+                        &legal_edges_2,
+                        &self.player_names,
+                    ),
                     (0, "timeout fallback".into()),
                 )
                 .await;

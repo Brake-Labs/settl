@@ -377,11 +377,16 @@ impl Player for LlamafilePlayer {
     async fn choose_settlement(
         &self,
         state: &GameState,
-        _player_id: PlayerId,
+        player_id: PlayerId,
         legal_vertices: &[VertexCoord],
+        round: u8,
+        player_names: &[String],
     ) -> (usize, String) {
         let system = self.system_prompt();
-        let user = prompt::setup_settlement_prompt(state, 1, legal_vertices, &self.name);
+        let strategy = self.personality.setup_strategy_text();
+        let user =
+            prompt::setup_settlement_prompt(state, player_id, round, legal_vertices, player_names);
+        let user = format!("SETUP STRATEGY:\n{strategy}\n\n{user}",);
         let tool = Self::index_tool(legal_vertices.len());
 
         match self.call_with_retry(&system, &user, tool).await {
@@ -400,11 +405,12 @@ impl Player for LlamafilePlayer {
     async fn choose_road(
         &self,
         state: &GameState,
-        _player_id: PlayerId,
+        player_id: PlayerId,
         legal_edges: &[EdgeCoord],
+        player_names: &[String],
     ) -> (usize, String) {
         let system = self.system_prompt();
-        let user = prompt::setup_road_prompt(state, legal_edges, &self.name);
+        let user = prompt::setup_road_prompt(state, player_id, legal_edges, player_names);
         let tool = Self::index_tool(legal_edges.len());
 
         match self.call_with_retry(&system, &user, tool).await {

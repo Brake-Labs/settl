@@ -100,6 +100,8 @@ impl Player for HumanPlayer {
         _state: &GameState,
         player_id: PlayerId,
         legal_vertices: &[VertexCoord],
+        _round: u8,
+        _player_names: &[String],
     ) -> (usize, String) {
         println!("\n--- Place Settlement ({}) ---", self.name);
         println!("Legal locations:");
@@ -120,6 +122,7 @@ impl Player for HumanPlayer {
         _state: &GameState,
         player_id: PlayerId,
         legal_edges: &[EdgeCoord],
+        _player_names: &[String],
     ) -> (usize, String) {
         println!("\n--- Place Road ({}) ---", self.name);
         println!("Legal locations:");
