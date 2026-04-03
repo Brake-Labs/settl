@@ -326,6 +326,11 @@ impl GameOrchestrator {
                 PlayerChoice::PlayYearOfPlenty => self.handle_year_of_plenty(player_id).await,
                 PlayerChoice::PlayRoadBuilding => self.handle_road_building(player_id).await,
                 PlayerChoice::ProposeTrade => self.handle_trade(player_id).await,
+                PlayerChoice::BuildRoadIntent => self.handle_build_road(player_id).await,
+                PlayerChoice::BuildSettlementIntent => {
+                    self.handle_build_settlement(player_id).await
+                }
+                PlayerChoice::BuildCityIntent => self.handle_build_city(player_id).await,
             };
 
             match action_result {
@@ -354,11 +359,40 @@ impl GameOrchestrator {
     }
 
     /// Build the list of choices for the current player.
+    ///
+    /// Placement actions (road, settlement, city) are collapsed into single
+    /// intent entries so the action bar shows one item per action type.
+    /// The specific location is collected via board cursor in a follow-up step.
     fn build_choices(&self) -> Vec<PlayerChoice> {
-        let mut choices: Vec<PlayerChoice> = rules::legal_actions(&self.state)
-            .into_iter()
-            .map(PlayerChoice::GameAction)
-            .collect();
+        let actions = rules::legal_actions(&self.state);
+        let mut choices: Vec<PlayerChoice> = Vec::new();
+        let mut has_road = false;
+        let mut has_settlement = false;
+        let mut has_city = false;
+
+        for action in actions {
+            match &action {
+                Action::BuildRoad(_) => {
+                    if !has_road {
+                        choices.push(PlayerChoice::BuildRoadIntent);
+                        has_road = true;
+                    }
+                }
+                Action::BuildSettlement(_) => {
+                    if !has_settlement {
+                        choices.push(PlayerChoice::BuildSettlementIntent);
+                        has_settlement = true;
+                    }
+                }
+                Action::BuildCity(_) => {
+                    if !has_city {
+                        choices.push(PlayerChoice::BuildCityIntent);
+                        has_city = true;
+                    }
+                }
+                _ => choices.push(PlayerChoice::GameAction(action)),
+            }
+        }
 
         // Add dev card intents if the player can play one.
         // Cards bought this turn (last N entries) cannot be played.
@@ -730,6 +764,74 @@ impl GameOrchestrator {
         );
         self.apply_and_log(action, player_id, "Road Building")?;
         Ok(())
+    }
+
+    /// Handle a Build Road intent: show board cursor, then apply the action.
+    async fn handle_build_road(&mut self, player_id: PlayerId) -> Result<(), OrchestratorError> {
+        let legal = rules::legal_road_edges(&self.state, player_id);
+        if legal.is_empty() {
+            return Ok(());
+        }
+        let (idx, reasoning) = self
+            .with_timeout(
+                self.players[player_id].choose_road(
+                    &self.state,
+                    player_id,
+                    &legal,
+                    &self.player_names,
+                ),
+                (0, "timeout fallback".into()),
+            )
+            .await;
+        let edge = legal[idx.min(legal.len() - 1)];
+        self.apply_and_log(Action::BuildRoad(edge), player_id, &reasoning)
+    }
+
+    /// Handle a Build Settlement intent: show board cursor, then apply the action.
+    async fn handle_build_settlement(
+        &mut self,
+        player_id: PlayerId,
+    ) -> Result<(), OrchestratorError> {
+        let legal = rules::legal_settlement_vertices(&self.state, player_id);
+        if legal.is_empty() {
+            return Ok(());
+        }
+        let (idx, reasoning) = self
+            .with_timeout(
+                self.players[player_id].choose_settlement(
+                    &self.state,
+                    player_id,
+                    &legal,
+                    0,
+                    &self.player_names,
+                ),
+                (0, "timeout fallback".into()),
+            )
+            .await;
+        let vertex = legal[idx.min(legal.len() - 1)];
+        self.apply_and_log(Action::BuildSettlement(vertex), player_id, &reasoning)
+    }
+
+    /// Handle a Build City intent: show board cursor, then apply the action.
+    async fn handle_build_city(&mut self, player_id: PlayerId) -> Result<(), OrchestratorError> {
+        let legal = rules::legal_city_vertices(&self.state, player_id);
+        if legal.is_empty() {
+            return Ok(());
+        }
+        let (idx, reasoning) = self
+            .with_timeout(
+                self.players[player_id].choose_settlement(
+                    &self.state,
+                    player_id,
+                    &legal,
+                    0,
+                    &self.player_names,
+                ),
+                (0, "timeout fallback".into()),
+            )
+            .await;
+        let vertex = legal[idx.min(legal.len() - 1)];
+        self.apply_and_log(Action::BuildCity(vertex), player_id, &reasoning)
     }
 
     /// Handle a player proposing a trade: collect offer, broadcast to others, execute if accepted.
