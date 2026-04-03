@@ -12,10 +12,10 @@ pub fn roll_dice(rng: &mut impl Rng) -> (u8, u8) {
 }
 
 /// Maximum cards of each resource type in the bank supply.
-const BANK_SUPPLY_PER_RESOURCE: u32 = 19;
+pub const BANK_SUPPLY_PER_RESOURCE: u32 = 19;
 
 /// Count how many cards of a given resource are currently held by all players.
-fn total_in_circulation(state: &GameState, resource: Resource) -> u32 {
+pub fn total_in_circulation(state: &GameState, resource: Resource) -> u32 {
     state
         .players
         .iter()

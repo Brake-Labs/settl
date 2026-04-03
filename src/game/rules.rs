@@ -5,6 +5,7 @@ use crate::game::board::{
     adjacent_edges, adjacent_vertices, edge_neighbors, edge_vertices, vertex_neighbors, Board,
     EdgeCoord, HexCoord, PortType, Resource, VertexCoord,
 };
+use crate::game::dice::{total_in_circulation, BANK_SUPPLY_PER_RESOURCE};
 use crate::game::state::{Building, GamePhase, GameState, VP_TO_WIN};
 
 /// Errors returned by `apply_action` when a rule is violated.
@@ -648,22 +649,102 @@ fn apply_play_dev_card(
         .iter()
         .position(|c| *c == card)
         .ok_or(RuleError::NoDevCards)?;
+
+    // Validate the action BEFORE consuming the card, so validation failures
+    // don't eat the card.
+    match &action {
+        DevCardAction::Knight {
+            robber_to,
+            steal_from: _,
+        } => {
+            if *robber_to == state.robber_hex {
+                return Err(RuleError::InvalidRobberPlacement);
+            }
+            if !state.board.has_hex(*robber_to) {
+                return Err(RuleError::InvalidRobberPlacement);
+            }
+        }
+        DevCardAction::YearOfPlenty(r1, r2) => {
+            // Bank must have the requested resources available.
+            let mut needed: HashMap<Resource, u32> = HashMap::new();
+            *needed.entry(*r1).or_insert(0) += 1;
+            *needed.entry(*r2).or_insert(0) += 1;
+            for (resource, count) in &needed {
+                let in_circulation = total_in_circulation(state, *resource);
+                let available = BANK_SUPPLY_PER_RESOURCE.saturating_sub(in_circulation);
+                if *count > available {
+                    return Err(RuleError::InsufficientResources);
+                }
+            }
+        }
+        DevCardAction::Monopoly(_) => {}
+        DevCardAction::RoadBuilding(e1, e2) => {
+            if state.roads.contains_key(e1) {
+                return Err(RuleError::InvalidPlacement(
+                    "First edge already has a road".into(),
+                ));
+            }
+            if state.roads.contains_key(e2) {
+                return Err(RuleError::InvalidPlacement(
+                    "Second edge already has a road".into(),
+                ));
+            }
+            if !edge_on_board(&state.board, *e1) {
+                return Err(RuleError::InvalidPlacement(
+                    "First edge not on board".into(),
+                ));
+            }
+            if !edge_on_board(&state.board, *e2) {
+                return Err(RuleError::InvalidPlacement(
+                    "Second edge not on board".into(),
+                ));
+            }
+            if state.players[player].roads_remaining < 2 {
+                return Err(RuleError::NoPiecesLeft);
+            }
+            // First road must connect to player's existing network.
+            let (v1, v2) = edge_vertices(*e1);
+            let connected_1 = [v1, v2].iter().any(|v| {
+                if let Some(b) = state.buildings.get(v) {
+                    return matches!(b, Building::Settlement(p) | Building::City(p) if *p == player);
+                }
+                adjacent_edges(*v)
+                    .iter()
+                    .any(|adj_e| *adj_e != *e1 && state.roads.get(adj_e) == Some(&player))
+            });
+            if !connected_1 {
+                return Err(RuleError::InvalidPlacement(
+                    "First road not connected to your network".into(),
+                ));
+            }
+            // Second road must connect to player's network INCLUDING the first road.
+            let (v3, v4) = edge_vertices(*e2);
+            let connected_2 = [v3, v4].iter().any(|v| {
+                if let Some(b) = state.buildings.get(v) {
+                    return matches!(b, Building::Settlement(p) | Building::City(p) if *p == player);
+                }
+                adjacent_edges(*v).iter().any(|adj_e| {
+                    *adj_e != *e2 && (*adj_e == *e1 || state.roads.get(adj_e) == Some(&player))
+                })
+            });
+            if !connected_2 {
+                return Err(RuleError::InvalidPlacement(
+                    "Second road not connected to your network".into(),
+                ));
+            }
+        }
+    }
+
+    // Consume the card now that validation has passed.
     state.players[player].dev_cards.remove(idx);
     state.players[player].has_played_dev_card_this_turn = true;
 
+    // Apply the action.
     match action {
         DevCardAction::Knight {
             robber_to,
             steal_from,
         } => {
-            // Validate robber placement.
-            if robber_to == state.robber_hex {
-                return Err(RuleError::InvalidRobberPlacement);
-            }
-            if !state.board.has_hex(robber_to) {
-                return Err(RuleError::InvalidRobberPlacement);
-            }
-
             state.robber_hex = robber_to;
             state.players[player].knights_played += 1;
             update_largest_army(state, player);
@@ -690,21 +771,6 @@ fn apply_play_dev_card(
             state.players[player].add_resource(resource, total);
         }
         DevCardAction::RoadBuilding(e1, e2) => {
-            // Place two free roads.
-            if state.roads.contains_key(&e1) {
-                return Err(RuleError::InvalidPlacement(
-                    "First edge already has a road".into(),
-                ));
-            }
-            if state.roads.contains_key(&e2) {
-                return Err(RuleError::InvalidPlacement(
-                    "Second edge already has a road".into(),
-                ));
-            }
-            if state.players[player].roads_remaining < 2 {
-                return Err(RuleError::NoPiecesLeft);
-            }
-
             state.roads.insert(e1, player);
             state.roads.insert(e2, player);
             state.players[player].roads_remaining -= 2;
@@ -1992,5 +2058,108 @@ mod tests {
         assert_eq!(trade_rate(&state, 0, Resource::Wheat), 2);
         // Other resources still at 4:1 (no generic port here).
         assert_eq!(trade_rate(&state, 0, Resource::Brick), 4);
+    }
+
+    // -- Dev card validation-before-consume --
+
+    #[test]
+    fn failed_dev_card_validation_preserves_card() {
+        let mut state = make_state(4);
+        set_playing(&mut state, 0);
+        state.players[0].dev_cards.push(DevCard::Knight);
+
+        // Try to play knight with robber staying on same hex (invalid).
+        let same_hex = state.robber_hex;
+        let result = apply_play_dev_card(
+            &mut state,
+            DevCard::Knight,
+            DevCardAction::Knight {
+                robber_to: same_hex,
+                steal_from: None,
+            },
+        );
+        assert_eq!(result, Err(RuleError::InvalidRobberPlacement));
+
+        // Card should still be in hand.
+        assert_eq!(state.players[0].dev_cards.len(), 1);
+        assert!(!state.players[0].has_played_dev_card_this_turn);
+    }
+
+    #[test]
+    fn year_of_plenty_rejects_when_bank_empty() {
+        let mut state = make_state(4);
+        set_playing(&mut state, 0);
+        state.players[0].dev_cards.push(DevCard::YearOfPlenty);
+
+        // Exhaust the bank's ore supply (19 total) by giving it all to player 1.
+        state.players[1].add_resource(Resource::Ore, 19);
+
+        let result = apply_play_dev_card(
+            &mut state,
+            DevCard::YearOfPlenty,
+            DevCardAction::YearOfPlenty(Resource::Ore, Resource::Wheat),
+        );
+        assert_eq!(result, Err(RuleError::InsufficientResources));
+        // Card preserved.
+        assert_eq!(state.players[0].dev_cards.len(), 1);
+    }
+
+    #[test]
+    fn road_building_rejects_disconnected_first_road() {
+        let mut state = make_state(4);
+        set_playing(&mut state, 0);
+        state.players[0].dev_cards.push(DevCard::RoadBuilding);
+
+        // Player 0 has a settlement at (0,0) North.
+        let v = VertexCoord::new(HexCoord::new(0, 0), VertexDirection::North);
+        place_settlement(&mut state, 0, v);
+
+        // Pick edges far from the settlement -- disconnected.
+        let far_e1 = EdgeCoord::new(HexCoord::new(2, -2), EdgeDirection::East);
+        let far_e2 = EdgeCoord::new(HexCoord::new(2, -2), EdgeDirection::SouthEast);
+
+        let result = apply_play_dev_card(
+            &mut state,
+            DevCard::RoadBuilding,
+            DevCardAction::RoadBuilding(far_e1, far_e2),
+        );
+        assert_eq!(
+            result,
+            Err(RuleError::InvalidPlacement(
+                "First road not connected to your network".into()
+            ))
+        );
+        // Card preserved, no roads placed.
+        assert_eq!(state.players[0].dev_cards.len(), 1);
+        assert!(state.roads.is_empty());
+    }
+
+    #[test]
+    fn road_building_rejects_disconnected_second_road() {
+        let mut state = make_state(4);
+        set_playing(&mut state, 0);
+        state.players[0].dev_cards.push(DevCard::RoadBuilding);
+
+        // Settlement at (0,0) North so first road can connect.
+        let v = VertexCoord::new(HexCoord::new(0, 0), VertexDirection::North);
+        place_settlement(&mut state, 0, v);
+
+        // First road adjacent to settlement, second road disconnected.
+        let e1 = EdgeCoord::new(HexCoord::new(0, 0), EdgeDirection::NorthEast);
+        let far_e2 = EdgeCoord::new(HexCoord::new(2, -2), EdgeDirection::East);
+
+        let result = apply_play_dev_card(
+            &mut state,
+            DevCard::RoadBuilding,
+            DevCardAction::RoadBuilding(e1, far_e2),
+        );
+        assert_eq!(
+            result,
+            Err(RuleError::InvalidPlacement(
+                "Second road not connected to your network".into()
+            ))
+        );
+        assert_eq!(state.players[0].dev_cards.len(), 1);
+        assert!(state.roads.is_empty());
     }
 }
