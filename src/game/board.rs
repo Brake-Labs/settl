@@ -242,7 +242,7 @@ pub struct Port {
 // Board
 // ---------------------------------------------------------------------------
 
-/// The Catan board: hex tiles, ports and their layout.
+/// The game board: hex tiles, ports and their layout.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Board {
     pub hexes: Vec<Hex>,
@@ -253,7 +253,7 @@ pub struct Board {
 // Board coordinate helpers
 // ---------------------------------------------------------------------------
 
-/// All 19 hex coordinates for a standard Catan board (3-4-5-4-3 layout).
+/// All 19 hex coordinates for the standard board (3-4-5-4-3 layout).
 pub fn board_hex_coords() -> Vec<HexCoord> {
     vec![
         // Row 0 (r = -2): 3 hexes
@@ -499,7 +499,7 @@ pub fn hex_edges(h: HexCoord) -> [EdgeCoord; 6] {
 // Board generation
 // ---------------------------------------------------------------------------
 
-/// Standard Catan terrain distribution (19 tiles).
+/// Standard terrain distribution (19 tiles).
 #[allow(dead_code)]
 fn standard_terrains() -> Vec<Terrain> {
     vec![
@@ -525,7 +525,7 @@ fn standard_terrains() -> Vec<Terrain> {
     ]
 }
 
-/// Standard Catan number tokens (18 tokens for 18 non-desert hexes).
+/// Standard number tokens (18 tokens for 18 non-desert hexes).
 #[allow(dead_code)]
 fn standard_number_tokens() -> Vec<u8> {
     vec![2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12]
@@ -554,7 +554,7 @@ fn has_adjacent_red_numbers(hexes: &[Hex]) -> bool {
     false
 }
 
-/// Fixed coastal port positions for the standard Catan board.
+/// Fixed coastal port positions for the standard board.
 ///
 /// Each port is placed along a coastal edge, giving two coastal vertices.
 /// All 9 ports are Generic (3:1) for now; specialised 2:1 ports are deferred.
@@ -664,11 +664,10 @@ impl Board {
             .map(|h| h.coord)
     }
 
-    /// Create the standard Catan beginner board (official 5th Edition layout).
+    /// Create the standard beginner board layout.
     ///
-    /// Desert is in the center at (0,0) with the robber. Terrain and number
-    /// token placement matches the rulebook's "Starting Setup for Beginners."
-    /// No 6/8 tokens are adjacent.
+    /// Desert is in the center at (0,0) with the robber. No 6/8 tokens are
+    /// adjacent.
     pub fn default_board() -> Self {
         use Terrain::*;
 
@@ -710,7 +709,7 @@ impl Board {
         Board { hexes, ports }
     }
 
-    /// Generate a random standard Catan board.
+    /// Generate a random standard board.
     ///
     /// Uses rejection sampling to ensure that 6 and 8 tokens are never placed
     /// on adjacent hexes.
@@ -1069,7 +1068,7 @@ mod tests {
     fn board_all_vertices_count() {
         let board = Board::default_board();
         let verts = board.all_vertices();
-        // Standard Catan board has 54 vertices.
+        // Standard board has 54 vertices.
         assert_eq!(verts.len(), 54, "Standard board should have 54 vertices");
     }
 
@@ -1077,7 +1076,7 @@ mod tests {
     fn board_all_edges_count() {
         let board = Board::default_board();
         let edges = board.all_edges();
-        // Standard Catan board has 72 edges.
+        // Standard board has 72 edges.
         assert_eq!(edges.len(), 72, "Standard board should have 72 edges");
     }
 

@@ -10,7 +10,7 @@ use crate::player;
 #[derive(Parser)]
 #[command(
     name = "settl",
-    about = "Play Settlers of Catan in your terminal with AI opponents"
+    about = "Play a hex-based resource trading game in your terminal with AI opponents"
 )]
 pub struct HeadlessCli {
     /// Number of players (2-4)
@@ -135,7 +135,7 @@ pub async fn run(cli: HeadlessCli) {
     };
 
     // Run game in text mode.
-    println!("Catan - Terminal Edition with LLM Players");
+    println!("settl - Terminal Edition with LLM Players");
     println!("==========================================\n");
     println!("{}\n", player::prompt::ascii_board(&board));
 

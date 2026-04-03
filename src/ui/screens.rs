@@ -20,7 +20,7 @@ const TITLE_ART: &str = r#"
  ███████║███████╗   ██║      ██║   ███████╗
  ╚══════╝╚══════╝   ╚═╝      ╚═╝   ╚══════╝"#;
 
-const SUBTITLE: &str = "terminal catan";
+const SUBTITLE: &str = "terminal settlers";
 
 // ── Main Menu ──────────────────────────────────────────────────────────
 

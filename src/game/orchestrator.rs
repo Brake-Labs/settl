@@ -39,7 +39,7 @@ impl std::fmt::Display for OrchestratorError {
 
 impl std::error::Error for OrchestratorError {}
 
-/// Drives a complete game of Catan from setup through victory.
+/// Drives a complete game from setup through victory.
 pub struct GameOrchestrator {
     pub state: GameState,
     pub players: Vec<Box<dyn Player>>,

@@ -170,18 +170,27 @@ pub fn format_hex_options(hexes: &[HexCoord]) -> String {
         .join("\n")
 }
 
-/// The full Catan rulebook, embedded at compile time.
-const CATAN_RULES: &str = include_str!("../../CATAN_RULES.md");
-
 /// Build the full system prompt for an LLM player.
 ///
-/// Includes the complete rulebook. Use `system_prompt_compact` for small models.
+/// Includes the complete rules summary. Use `system_prompt_compact` for small models.
 pub fn system_prompt(player_name: &str, personality_prompt: &str) -> String {
     format!(
-        "You are playing a game of Settlers of Catan in a terminal environment.\n\
+        "You are playing settl, a hex-based resource trading and building game in a terminal environment.\n\
          Your name is {player_name}.\n\n\
          {personality_prompt}\n\n\
-         {CATAN_RULES}\n\n\
+         RULES:\n\
+         - The board is 19 hex tiles producing resources: Wood (forest), Brick (hills), Sheep (pasture), Wheat (fields), Ore (mountains). The desert produces nothing.\n\
+         - Build settlements at hex vertices, roads along hex edges, and upgrade settlements to cities.\n\
+         - Costs: Road = Wood+Brick. Settlement = Wood+Brick+Wheat+Sheep. City = 2 Wheat+3 Ore. Dev Card = Wheat+Sheep+Ore.\n\
+         - Each turn: roll 2 dice. Hexes matching the sum produce resources for adjacent settlements (1 card) and cities (2 cards). The robber blocks production on its hex.\n\
+         - Roll 7: players with >7 cards discard half (rounded down), then the roller moves the robber and steals 1 card from an adjacent opponent.\n\
+         - Trade with other players (domestic trade) or with the bank (4:1 default, 3:1 with a generic harbor, 2:1 with a matching special harbor).\n\
+         - Distance rule: settlements must have at least 1 empty vertex between them.\n\
+         - Dev cards: Knight (move robber + steal), Road Building (2 free roads), Year of Plenty (2 free resources from bank), Monopoly (take all of 1 resource type from all players). Play at most 1 per turn, not on the turn purchased.\n\
+         - Longest Road (5+ continuous road segments) and Largest Army (3+ knights played) each award 2 VP.\n\
+         - Victory Point dev cards are worth 1 VP each (kept hidden until winning).\n\
+         - Setup uses a snake draft: each player places 2 settlements + 2 roads. Second settlement grants starting resources.\n\
+         - First player to reach 10 VP on their own turn wins.\n\n\
          INSTRUCTIONS:\n\
          - When you choose, ALWAYS explain your strategic reasoning before deciding.\n\
          - Be concise but specific -- reference coordinates and resource counts.",
@@ -194,7 +203,7 @@ pub fn system_prompt(player_name: &str, personality_prompt: &str) -> String {
 /// limited context windows.
 pub fn system_prompt_compact(player_name: &str, personality_prompt: &str) -> String {
     format!(
-        "You are playing Settlers of Catan. Your name is {player_name}.\n\n\
+        "You are playing settl, a hex-based resource trading and building game. Your name is {player_name}.\n\n\
          {personality_prompt}\n\n\
          RULES:\n\
          - Build settlements at vertices, roads along edges, upgrade settlements to cities.\n\

@@ -1,6 +1,5 @@
 ---
 source: src/ui/snapshot_tests.rs
-assertion_line: 50
 expression: buffer_to_string(&buf)
 ---
 
@@ -10,9 +9,9 @@ expression: buffer_to_string(&buf)
 
                                                       #  Name         Type     Model              Personality
                                                      > 1  Player       Human    —                  —
-                                                       2  Bob          Llamafile Bonsai-1.7B        Aggressive
-                                                       3  Charlie      Llamafile Bonsai-1.7B        Grudge Holder
-                                                       4  Diana        Llamafile Bonsai-1.7B        Builder
+                                                       2  Bob          LLM      claude-sonnet-4-6  Aggressive
+                                                       3  Charlie      LLM      claude-sonnet-4-6  Grudge Holder
+                                                       4  Diana        LLM      claude-sonnet-4-6  Builder
 
 
                                                        [ Start Game ]
