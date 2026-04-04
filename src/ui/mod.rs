@@ -81,6 +81,7 @@ pub enum Screen {
     MainMenu(MainMenuState),
     NewGame(NewGameState),
     About(AboutState),
+    Settings(SettingsState),
     LlamafileSetup(LlamafileSetupState),
     Playing(PlayingState),
     PostGame(PostGameState),
@@ -468,6 +469,8 @@ pub struct App {
     pub llamafile_process: Option<crate::llamafile::LlamafileProcess>,
     /// Whether to show the terminal-too-small warning popup.
     pub show_size_warning: bool,
+    /// Model registry and app settings, loaded from `~/.settl/config.toml`.
+    pub config: crate::config::Config,
 }
 
 // ── Main Entry Point ───────────────────────────────────────────────────
@@ -492,11 +495,14 @@ pub async fn run_app() -> io::Result<()> {
     let size = terminal.size()?;
     let show_size_warning = size.width < MIN_TERM_WIDTH || size.height < MIN_TERM_HEIGHT;
 
+    let config = crate::config::load_config();
+
     let mut app = App {
         screen: Screen::MainMenu(MainMenuState::new()),
         personalities,
         llamafile_process: None,
         show_size_warning,
+        config,
     };
 
     let result = run_event_loop(&mut terminal, &mut app).await;
@@ -549,15 +555,30 @@ async fn run_event_loop(
                             Action::Transition(screen) => app.screen = screen,
                             Action::StartGame => {
                                 if let Screen::NewGame(ref ng) = app.screen {
-                                    if let Some(ref process) = app.llamafile_process {
+                                    let model_entry = app.config.models.get(ng.model_index);
+                                    let is_api = matches!(
+                                        model_entry.map(|e| &e.backend),
+                                        Some(crate::config::ModelBackend::Api { .. })
+                                    );
+                                    if is_api {
+                                        // API models don't need llamafile -- launch directly.
                                         let screen =
-                                            launch_game(ng, &app.personalities, Some(process.port));
+                                            launch_game(ng, &app.personalities, &app.config, None);
+                                        app.screen = screen;
+                                    } else if let Some(ref process) = app.llamafile_process {
+                                        let screen = launch_game(
+                                            ng,
+                                            &app.personalities,
+                                            &app.config,
+                                            Some(process.port),
+                                        );
                                         app.screen = screen;
                                     } else {
                                         let (status_tx, status_rx) = mpsc::unbounded_channel();
                                         let saved_config = clone_new_game_state(ng);
+                                        let (url, filename) = llamafile_url_filename(model_entry);
                                         let (handle, process_rx) =
-                                            spawn_llamafile_setup(ng.llamafile_model, status_tx);
+                                            spawn_llamafile_setup(url, filename, status_tx);
                                         let setup_state = LlamafileSetupState {
                                             status: crate::llamafile::LlamafileStatus::Checking,
                                             status_rx,
@@ -572,22 +593,40 @@ async fn run_event_loop(
                             }
                             Action::ResumeGame => {
                                 if let Some(save) = crate::game::save::load_autosave() {
-                                    let model = save.llamafile_model;
-                                    if let Some(ref process) = app.llamafile_process {
+                                    // Find the model from the save in the current config.
+                                    let model_entry = resolve_save_model(&save, &app.config);
+                                    let is_api = matches!(
+                                        model_entry.map(|e| &e.backend),
+                                        Some(crate::config::ModelBackend::Api { .. })
+                                    );
+                                    if is_api {
                                         let screen = resume_game(
                                             save,
                                             &app.personalities,
+                                            &app.config,
+                                            None,
+                                        );
+                                        app.screen = screen;
+                                    } else if let Some(ref process) = app.llamafile_process {
+                                        let screen = resume_game(
+                                            save,
+                                            &app.personalities,
+                                            &app.config,
                                             Some(process.port),
                                         );
                                         app.screen = screen;
                                     } else {
                                         let (status_tx, status_rx) = mpsc::unbounded_channel();
+                                        let (url, filename) = llamafile_url_filename(model_entry);
                                         let (handle, process_rx) =
-                                            spawn_llamafile_setup(model, status_tx);
+                                            spawn_llamafile_setup(url, filename, status_tx);
                                         let setup_state = LlamafileSetupState {
                                             status: crate::llamafile::LlamafileStatus::Checking,
                                             status_rx,
-                                            saved_config: NewGameState::new(&app.personalities),
+                                            saved_config: NewGameState::new(
+                                                &app.personalities,
+                                                &app.config,
+                                            ),
                                             task_handle: Some(handle),
                                             process_rx: Some(process_rx),
                                             resume_save: Some(save),
@@ -624,9 +663,14 @@ async fn run_event_loop(
                     std::mem::replace(&mut app.screen, Screen::MainMenu(MainMenuState::new()))
                 {
                     let screen = if let Some(save) = setup.resume_save {
-                        resume_game(save, &app.personalities, Some(port))
+                        resume_game(save, &app.personalities, &app.config, Some(port))
                     } else {
-                        launch_game(&setup.saved_config, &app.personalities, Some(port))
+                        launch_game(
+                            &setup.saved_config,
+                            &app.personalities,
+                            &app.config,
+                            Some(port),
+                        )
                     };
                     app.screen = screen;
                 }
@@ -660,6 +704,7 @@ fn draw_screen(f: &mut Frame, screen: &Screen) {
         Screen::MainMenu(state) => screens::draw_main_menu(f, state),
         Screen::NewGame(state) => screens::draw_new_game(f, state),
         Screen::About(_) => screens::draw_about(f),
+        Screen::Settings(state) => screens::draw_settings(f, state),
         Screen::LlamafileSetup(state) => screens::draw_llamafile_setup(f, state),
         Screen::Playing(ps) => layout::draw_playing(f, ps),
         Screen::PostGame(state) => screens::draw_post_game(f, state),
@@ -746,7 +791,11 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                         "Continue" => Action::ResumeGame,
                         "New Game" => Action::Transition(Screen::NewGame(NewGameState::new(
                             &app.personalities,
+                            &app.config,
                         ))),
+                        "Settings" => Action::Transition(Screen::Settings(
+                            SettingsState::from_config(&app.config),
+                        )),
                         "About" => Action::Transition(Screen::About(AboutState)),
                         "Quit" => Action::Quit,
                         _ => Action::None,
@@ -763,6 +812,8 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
             }
             _ => Action::None,
         },
+
+        Screen::Settings(state) => handle_settings_input(state, key, &mut app.config),
 
         Screen::NewGame(state) => match key {
             KeyCode::Esc => Action::Transition(Screen::MainMenu(MainMenuState::new())),
@@ -808,7 +859,10 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                         Action::Transition(Screen::NewGame(setup.saved_config))
                     }
                 } else {
-                    Action::Transition(Screen::NewGame(NewGameState::new(&app.personalities)))
+                    Action::Transition(Screen::NewGame(NewGameState::new(
+                        &app.personalities,
+                        &app.config,
+                    )))
                 }
             }
             _ => Action::None,
@@ -1151,9 +1205,10 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                 Action::None
             }
             KeyCode::Enter => match POST_GAME_ITEMS[state.selected] {
-                "Play Again" => {
-                    Action::Transition(Screen::NewGame(NewGameState::new(&app.personalities)))
-                }
+                "Play Again" => Action::Transition(Screen::NewGame(NewGameState::new(
+                    &app.personalities,
+                    &app.config,
+                ))),
                 "Main Menu" => Action::Transition(Screen::MainMenu(MainMenuState::new())),
                 "Quit" => Action::Quit,
                 _ => Action::None,
@@ -1215,7 +1270,7 @@ fn focusable_rows(state: &NewGameState) -> Vec<NewGameFocus> {
     }
     rows.push(NewGameFocus::FriendlyRobber);
     rows.push(NewGameFocus::BoardLayout);
-    rows.push(NewGameFocus::ModelSize);
+    rows.push(NewGameFocus::AiModel);
     rows.push(NewGameFocus::StartButton);
     rows
 }
@@ -1260,12 +1315,17 @@ fn cycle_new_game_value(state: &mut NewGameState, forward: bool) {
         NewGameFocus::BoardLayout => {
             state.random_board = !state.random_board;
         }
-        NewGameFocus::ModelSize => {
-            use crate::llamafile::LlamafileModel;
-            state.llamafile_model = match state.llamafile_model {
-                LlamafileModel::Bonsai1B => LlamafileModel::Bonsai8B,
-                LlamafileModel::Bonsai8B => LlamafileModel::Bonsai1B,
-            };
+        NewGameFocus::AiModel => {
+            if !state.model_names.is_empty() {
+                state.model_index = if forward {
+                    (state.model_index + 1) % state.model_names.len()
+                } else {
+                    state
+                        .model_index
+                        .checked_sub(1)
+                        .unwrap_or(state.model_names.len() - 1)
+                };
+            }
         }
         NewGameFocus::StartButton => {}
     }
@@ -1276,6 +1336,7 @@ fn cycle_new_game_value(state: &mut NewGameState, forward: bool) {
 fn launch_game(
     ng: &NewGameState,
     discovered_personalities: &[Personality],
+    config: &crate::config::Config,
     llamafile_port: Option<u16>,
 ) -> Screen {
     use player::tui_human::{HumanInputChannel, TuiHumanPlayer};
@@ -1319,14 +1380,8 @@ fn launch_game(
         None
     };
 
-    // Build a shared Anthropic client if any player needs it.
-    let llama_client = llamafile_port.map(|port| {
-        player::anthropic_client::AnthropicClient::new(
-            format!("http://127.0.0.1:{}", port),
-            "no-key",
-            player::llm_player::LLAMAFILE_MODEL,
-        )
-    });
+    // Build a shared AI client from the selected model entry.
+    let ai_client = build_ai_client(config, ng.model_index, llamafile_port);
 
     // Create UI event channel.
     let (tx, rx) = mpsc::unbounded_channel();
@@ -1344,9 +1399,9 @@ fn launch_game(
                         .cloned()
                         .unwrap_or_default()
                 };
-                let client = llama_client
+                let client = ai_client
                     .clone()
-                    .expect("llamafile client should exist when Llamafile players are used");
+                    .expect("AI client should exist when AI players are used");
                 let mut llm = player::llm_player::LlmPlayer::new(
                     pc.name.clone(),
                     client,
@@ -1389,14 +1444,18 @@ fn launch_game(
             personality_index: pc.personality_index,
         })
         .collect();
-    let model = ng.llamafile_model;
+    let model_name = config
+        .models
+        .get(ng.model_index)
+        .map(|e| e.name.clone())
+        .unwrap_or_default();
 
     // Spawn game engine.
     tokio::spawn(async move {
         let mut orchestrator = GameOrchestrator::new(state, players);
         orchestrator.ui_tx = Some(tx);
         orchestrator.player_configs = save_configs;
-        orchestrator.llamafile_model = model;
+        orchestrator.model_name = model_name;
 
         orchestrator.run().await
     });
@@ -1413,6 +1472,7 @@ fn launch_game(
 fn resume_game(
     save: crate::game::save::SaveFile,
     discovered_personalities: &[Personality],
+    config: &crate::config::Config,
     llamafile_port: Option<u16>,
 ) -> Screen {
     use player::tui_human::{HumanInputChannel, TuiHumanPlayer};
@@ -1444,13 +1504,9 @@ fn resume_game(
         None
     };
 
-    let llama_client = llamafile_port.map(|port| {
-        player::anthropic_client::AnthropicClient::new(
-            format!("http://127.0.0.1:{}", port),
-            "no-key",
-            player::llm_player::LLAMAFILE_MODEL,
-        )
-    });
+    // Find the model from the save in the current config.
+    let model_index = resolve_save_model_index(&save, config);
+    let ai_client = build_ai_client(config, model_index, llamafile_port);
 
     let (tx, rx) = mpsc::unbounded_channel();
 
@@ -1471,9 +1527,9 @@ fn resume_game(
                     .cloned()
                     .unwrap_or_default()
             };
-            let client = llama_client
+            let client = ai_client
                 .clone()
-                .expect("llamafile client should exist when Llamafile players are used");
+                .expect("AI client should exist when AI players are used");
             let mut llm = player::llm_player::LlmPlayer::new(
                 pc.name.clone(),
                 client,
@@ -1501,7 +1557,7 @@ fn resume_game(
 
     let player_names = save.player_names.clone();
     let save_configs = save.player_configs.clone();
-    let model = save.llamafile_model;
+    let model_name = save.model_name.clone();
     let events = save.events;
     let state = save.game_state;
 
@@ -1509,7 +1565,7 @@ fn resume_game(
         let mut orchestrator = GameOrchestrator::new(state, players);
         orchestrator.ui_tx = Some(tx);
         orchestrator.player_configs = save_configs;
-        orchestrator.llamafile_model = model;
+        orchestrator.model_name = model_name;
         orchestrator.events = events;
 
         orchestrator.run().await
@@ -1553,7 +1609,8 @@ fn build_post_game(ps: &PlayingState) -> PostGameState {
 ///
 /// Returns the `JoinHandle` and a oneshot receiver for the process.
 fn spawn_llamafile_setup(
-    model: crate::llamafile::LlamafileModel,
+    url: String,
+    filename: String,
     status_tx: mpsc::UnboundedSender<crate::llamafile::LlamafileStatus>,
 ) -> (
     tokio::task::JoinHandle<()>,
@@ -1562,7 +1619,7 @@ fn spawn_llamafile_setup(
     let (process_tx, process_rx) = tokio::sync::oneshot::channel();
 
     let handle = tokio::spawn(async move {
-        match crate::llamafile::ensure_llamafile(model, status_tx.clone()).await {
+        match crate::llamafile::ensure_llamafile_custom(&url, &filename, status_tx.clone()).await {
             Ok(path) => {
                 let _ = status_tx.send(crate::llamafile::LlamafileStatus::Starting);
                 let _ = status_tx.send(crate::llamafile::LlamafileStatus::WaitingForReady);
@@ -1572,7 +1629,6 @@ fn spawn_llamafile_setup(
                         if process_tx.send(process).is_ok() {
                             let _ = status_tx.send(crate::llamafile::LlamafileStatus::Ready(port));
                         }
-                        // If send fails, the receiver was dropped (user cancelled).
                     }
                     Err(e) => {
                         let _ = status_tx.send(crate::llamafile::LlamafileStatus::Error(e));
@@ -1588,6 +1644,78 @@ fn spawn_llamafile_setup(
     (handle, process_rx)
 }
 
+/// Extract the llamafile URL and filename from a model entry, with defaults.
+fn llamafile_url_filename(entry: Option<&crate::config::ModelEntry>) -> (String, String) {
+    match entry.map(|e| &e.backend) {
+        Some(crate::config::ModelBackend::Llamafile { url, filename }) => {
+            (url.clone(), filename.clone())
+        }
+        _ => {
+            // Fallback to default Bonsai 1.7B.
+            let default = crate::llamafile::LlamafileModel::default();
+            (default.url().to_string(), default.filename().to_string())
+        }
+    }
+}
+
+/// Build an AI client from the selected model entry in the config.
+fn build_ai_client(
+    config: &crate::config::Config,
+    model_index: usize,
+    llamafile_port: Option<u16>,
+) -> Option<Arc<player::anthropic_client::AnthropicClient>> {
+    let entry = config.models.get(model_index)?;
+    match &entry.backend {
+        crate::config::ModelBackend::Llamafile { .. } => llamafile_port.map(|port| {
+            player::anthropic_client::AnthropicClient::new(
+                format!("http://127.0.0.1:{}", port),
+                "no-key",
+                player::llm_player::LLAMAFILE_MODEL,
+            )
+        }),
+        crate::config::ModelBackend::Api {
+            base_url,
+            api_key,
+            model,
+        } => Some(player::anthropic_client::AnthropicClient::new(
+            base_url, api_key, model,
+        )),
+    }
+}
+
+/// Look up a save file's model in the current config, returning the entry.
+fn resolve_save_model<'a>(
+    save: &crate::game::save::SaveFile,
+    config: &'a crate::config::Config,
+) -> Option<&'a crate::config::ModelEntry> {
+    let idx = resolve_save_model_index(save, config);
+    config.models.get(idx)
+}
+
+/// Look up a save file's model in the current config, returning the index.
+fn resolve_save_model_index(
+    save: &crate::game::save::SaveFile,
+    config: &crate::config::Config,
+) -> usize {
+    // Try to find by model_name.
+    if !save.model_name.is_empty() {
+        if let Some(idx) = config.models.iter().position(|m| m.name == save.model_name) {
+            return idx;
+        }
+    }
+    // Fallback: try to match by LlamafileModel (backward compat with old saves).
+    if let Some(ref lm) = save.llamafile_model {
+        let filename = lm.filename();
+        if let Some(idx) = config.models.iter().position(|m| {
+            matches!(&m.backend, crate::config::ModelBackend::Llamafile { filename: f, .. } if f == filename)
+        }) {
+            return idx;
+        }
+    }
+    // Default to first entry.
+    0
+}
+
 /// Clone a `NewGameState` for saving across screen transitions.
 fn clone_new_game_state(ng: &NewGameState) -> NewGameState {
     NewGameState {
@@ -1597,7 +1725,154 @@ fn clone_new_game_state(ng: &NewGameState) -> NewGameState {
         four_players: ng.four_players,
         friendly_robber: ng.friendly_robber,
         random_board: ng.random_board,
-        llamafile_model: ng.llamafile_model,
+        model_index: ng.model_index,
+        model_names: ng.model_names.clone(),
+    }
+}
+
+// ── Settings Input ────────────────────────────────────────────────────
+
+fn handle_settings_input(
+    state: &mut SettingsState,
+    key: KeyCode,
+    config: &mut crate::config::Config,
+) -> Action {
+    use crate::config::{ModelBackend, ModelEntry};
+    use screens::{ModelField, SettingsFocus};
+
+    match state.focus {
+        SettingsFocus::ModelList => match key {
+            KeyCode::Esc => {
+                if state.dirty {
+                    *config = state.save();
+                }
+                Action::Transition(Screen::MainMenu(MainMenuState::new()))
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if !state.models.is_empty() {
+                    state.selected = state
+                        .selected
+                        .checked_sub(1)
+                        .unwrap_or(state.models.len() - 1);
+                }
+                Action::None
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if !state.models.is_empty() {
+                    state.selected = (state.selected + 1) % state.models.len();
+                }
+                Action::None
+            }
+            KeyCode::Enter => {
+                if !state.models.is_empty() {
+                    state.begin_edit(ModelField::Name);
+                }
+                Action::None
+            }
+            KeyCode::Char('a') => {
+                state.models.push(ModelEntry {
+                    name: "New Llamafile".into(),
+                    backend: ModelBackend::Llamafile {
+                        url: String::new(),
+                        filename: String::new(),
+                    },
+                });
+                state.selected = state.models.len() - 1;
+                state.dirty = true;
+                state.begin_edit(ModelField::Name);
+                Action::None
+            }
+            KeyCode::Char('A') => {
+                state.models.push(ModelEntry {
+                    name: "New API Model".into(),
+                    backend: ModelBackend::Api {
+                        base_url: "https://api.anthropic.com".into(),
+                        api_key: String::new(),
+                        model: String::new(),
+                    },
+                });
+                state.selected = state.models.len() - 1;
+                state.dirty = true;
+                state.begin_edit(ModelField::Name);
+                Action::None
+            }
+            KeyCode::Char('d') => {
+                if !state.models.is_empty() {
+                    state.focus = SettingsFocus::ConfirmDelete;
+                }
+                Action::None
+            }
+            _ => Action::None,
+        },
+
+        SettingsFocus::EditField(field) => match key {
+            KeyCode::Esc => {
+                state.focus = SettingsFocus::ModelList;
+                Action::None
+            }
+            KeyCode::Enter | KeyCode::Tab => {
+                state.commit_edit(field);
+                // Advance to next field, or return to list if done.
+                if let Some(entry) = state.models.get(state.selected) {
+                    if let Some(next) = field.next(&entry.backend) {
+                        state.begin_edit(next);
+                    } else {
+                        state.focus = SettingsFocus::ModelList;
+                    }
+                } else {
+                    state.focus = SettingsFocus::ModelList;
+                }
+                Action::None
+            }
+            KeyCode::Backspace => {
+                state.input_backspace();
+                Action::None
+            }
+            KeyCode::Delete => {
+                state.input_delete();
+                Action::None
+            }
+            KeyCode::Left => {
+                state.input_left();
+                Action::None
+            }
+            KeyCode::Right => {
+                state.input_right();
+                Action::None
+            }
+            KeyCode::Home => {
+                state.input_cursor = 0;
+                Action::None
+            }
+            KeyCode::End => {
+                state.input_cursor = state.input_buf.len();
+                Action::None
+            }
+            KeyCode::Char(ch) => {
+                state.input_insert(ch);
+                Action::None
+            }
+            _ => Action::None,
+        },
+
+        SettingsFocus::ConfirmDelete => match key {
+            KeyCode::Char('y') => {
+                if state.selected < state.models.len() {
+                    state.models.remove(state.selected);
+                    if state.selected >= state.models.len() && !state.models.is_empty() {
+                        state.selected = state.models.len() - 1;
+                    }
+                    state.dirty = true;
+                }
+                state.focus = SettingsFocus::ModelList;
+                Action::None
+            }
+            KeyCode::Char('n') | KeyCode::Esc => {
+                state.focus = SettingsFocus::ModelList;
+                Action::None
+            }
+            _ => Action::None,
+        },
     }
 }
 

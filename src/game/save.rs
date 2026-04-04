@@ -26,7 +26,12 @@ pub struct SaveFile {
     pub player_names: Vec<String>,
     pub player_configs: Vec<SavedPlayerConfig>,
     pub events: Vec<GameEvent>,
-    pub llamafile_model: LlamafileModel,
+    /// Name of the AI model used (matches a Config.models entry by name).
+    #[serde(default)]
+    pub model_name: String,
+    /// Legacy field for backward compatibility with old saves.
+    #[serde(default)]
+    pub llamafile_model: Option<LlamafileModel>,
     pub saved_at: String,
 }
 
@@ -73,8 +78,12 @@ mod tests {
     use crate::game::board::Board;
 
     /// Use a temp directory instead of ~/.settl/saves for tests.
+    /// Each call uses a unique ID to avoid races when tests run in parallel.
     fn save_roundtrip_in_tempdir() -> (SaveFile, SaveFile) {
-        let dir = std::env::temp_dir().join(format!("settl_test_{}", std::process::id()));
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("settl_test_{}_{id}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("test_autosave.json");
 
@@ -99,7 +108,8 @@ mod tests {
                 },
             ],
             events: vec![],
-            llamafile_model: LlamafileModel::default(),
+            model_name: "Bonsai 1.7B (fast)".into(),
+            llamafile_model: Some(LlamafileModel::default()),
             game_state: state,
             saved_at: "2026-04-04T00:00:00Z".into(),
         };
@@ -134,7 +144,7 @@ mod tests {
             loaded.game_state.board.hexes.len()
         );
         assert_eq!(original.saved_at, loaded.saved_at);
-        assert_eq!(original.llamafile_model, loaded.llamafile_model);
+        assert_eq!(original.model_name, loaded.model_name);
     }
 
     #[test]

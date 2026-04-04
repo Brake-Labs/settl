@@ -18,7 +18,7 @@ expression: buffer_to_string(&buf)
 
                                                           Friendly Robber     Off
                                                           Board Layout        Beginner
-                                                          AI Model            1.7B (fast)
+                                                          AI Model            Bonsai 1.7B (fast)
 
                                                        [ Start Game ]
 

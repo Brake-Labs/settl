@@ -1,4 +1,4 @@
-//! Non-game screens: Title, MainMenu, NewGame setup, PostGame.
+//! Non-game screens: Title, MainMenu, NewGame setup, Settings, PostGame.
 //!
 //! Each screen has a state struct and a `draw_*` rendering function.
 //! Input handling lives in `mod.rs` dispatch.
@@ -6,6 +6,7 @@
 use ratatui::prelude::*;
 use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 
+use crate::config::{Config, ModelBackend, ModelEntry};
 use crate::player::personality::Personality;
 
 use super::menu::render_menu;
@@ -38,9 +39,9 @@ impl MainMenuState {
 
     pub fn menu_items(&self) -> Vec<&'static str> {
         if self.has_save {
-            vec!["Continue", "New Game", "About", "Quit"]
+            vec!["Continue", "New Game", "Settings", "About", "Quit"]
         } else {
-            vec!["New Game", "About", "Quit"]
+            vec!["New Game", "Settings", "About", "Quit"]
         }
     }
 }
@@ -83,7 +84,7 @@ pub enum NewGameFocus {
     /// Board Layout toggle.
     BoardLayout,
     /// AI Model Size toggle.
-    ModelSize,
+    AiModel,
     /// The "Start Game" button.
     StartButton,
 }
@@ -100,12 +101,14 @@ pub struct NewGameState {
     pub friendly_robber: bool,
     /// Whether to randomize the board layout.
     pub random_board: bool,
-    /// Which llamafile model to use for AI players.
-    pub llamafile_model: crate::llamafile::LlamafileModel,
+    /// Selected model index into the Config.models registry.
+    pub model_index: usize,
+    /// Cached model display names from the config.
+    pub model_names: Vec<String>,
 }
 
 impl NewGameState {
-    pub fn new(personalities: &[Personality]) -> Self {
+    pub fn new(personalities: &[Personality], config: &Config) -> Self {
         let personality_names: Vec<String> = vec![
             "Balanced".into(),
             "Aggressive".into(),
@@ -116,6 +119,8 @@ impl NewGameState {
         .into_iter()
         .chain(personalities.iter().map(|p| p.name.clone()))
         .collect();
+
+        let model_names: Vec<String> = config.models.iter().map(|m| m.name.clone()).collect();
 
         let username = std::env::var("USER")
             .ok()
@@ -147,7 +152,8 @@ impl NewGameState {
             four_players: true,
             friendly_robber: false,
             random_board: false,
-            llamafile_model: crate::llamafile::LlamafileModel::default(),
+            model_index: 0,
+            model_names,
         }
     }
 
@@ -198,6 +204,224 @@ impl std::fmt::Debug for LlamafileSetupState {
         f.debug_struct("LlamafileSetupState")
             .field("status", &self.status)
             .finish_non_exhaustive()
+    }
+}
+
+// ── Settings ──────────────────────────────────────────────────────────
+
+/// Which field is being edited in a model entry.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ModelField {
+    Name,
+    /// Llamafile download URL.
+    Url,
+    /// Llamafile filename on disk.
+    Filename,
+    /// API base URL.
+    BaseUrl,
+    /// API key.
+    ApiKey,
+    /// API model identifier.
+    Model,
+}
+
+impl ModelField {
+    /// Label shown in the edit form.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Name => "Name",
+            Self::Url => "URL",
+            Self::Filename => "Filename",
+            Self::BaseUrl => "Base URL",
+            Self::ApiKey => "API Key",
+            Self::Model => "Model",
+        }
+    }
+
+    /// Return the fields applicable to a given backend, in order.
+    pub fn fields_for(backend: &ModelBackend) -> &'static [ModelField] {
+        match backend {
+            ModelBackend::Llamafile { .. } => {
+                &[ModelField::Name, ModelField::Url, ModelField::Filename]
+            }
+            ModelBackend::Api { .. } => &[
+                ModelField::Name,
+                ModelField::BaseUrl,
+                ModelField::ApiKey,
+                ModelField::Model,
+            ],
+        }
+    }
+
+    /// Return the next field after this one for the given backend, or None if last.
+    pub fn next(self, backend: &ModelBackend) -> Option<ModelField> {
+        let fields = Self::fields_for(backend);
+        let pos = fields.iter().position(|f| *f == self)?;
+        fields.get(pos + 1).copied()
+    }
+}
+
+/// Sub-focus within the Settings screen.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum SettingsFocus {
+    /// Browsing the model list.
+    ModelList,
+    /// Editing a field of the selected model.
+    EditField(ModelField),
+    /// Confirming deletion of the selected model.
+    ConfirmDelete,
+}
+
+/// State for the Settings screen.
+#[derive(Debug)]
+pub struct SettingsState {
+    /// Working copy of the model list (cloned from Config on entry).
+    pub models: Vec<ModelEntry>,
+    /// Which model row is focused.
+    pub selected: usize,
+    /// Current sub-focus.
+    pub focus: SettingsFocus,
+    /// Text input buffer (used when editing a field).
+    pub input_buf: String,
+    /// Cursor position within input_buf (byte offset).
+    pub input_cursor: usize,
+    /// Whether changes have been made since entering.
+    pub dirty: bool,
+}
+
+impl SettingsState {
+    pub fn from_config(config: &Config) -> Self {
+        Self {
+            models: config.models.clone(),
+            selected: 0,
+            focus: SettingsFocus::ModelList,
+            input_buf: String::new(),
+            input_cursor: 0,
+            dirty: false,
+        }
+    }
+
+    /// Start editing a field: populate the input buffer with the current value.
+    pub fn begin_edit(&mut self, field: ModelField) {
+        if let Some(entry) = self.models.get(self.selected) {
+            self.input_buf = Self::field_value(entry, field);
+            self.input_cursor = self.input_buf.len();
+            self.focus = SettingsFocus::EditField(field);
+        }
+    }
+
+    /// Apply the current input buffer to the selected model's field.
+    pub fn commit_edit(&mut self, field: ModelField) {
+        if let Some(entry) = self.models.get_mut(self.selected) {
+            let val = self.input_buf.clone();
+            match (&mut entry.backend, field) {
+                (_, ModelField::Name) => entry.name = val,
+                (ModelBackend::Llamafile { ref mut url, .. }, ModelField::Url) => *url = val,
+                (
+                    ModelBackend::Llamafile {
+                        ref mut filename, ..
+                    },
+                    ModelField::Filename,
+                ) => {
+                    *filename = val;
+                }
+                (
+                    ModelBackend::Api {
+                        ref mut base_url, ..
+                    },
+                    ModelField::BaseUrl,
+                ) => {
+                    *base_url = val;
+                }
+                (
+                    ModelBackend::Api {
+                        ref mut api_key, ..
+                    },
+                    ModelField::ApiKey,
+                ) => {
+                    *api_key = val;
+                }
+                (ModelBackend::Api { ref mut model, .. }, ModelField::Model) => *model = val,
+                _ => {}
+            }
+            self.dirty = true;
+        }
+    }
+
+    /// Read the current value of a field from a model entry.
+    fn field_value(entry: &ModelEntry, field: ModelField) -> String {
+        match (&entry.backend, field) {
+            (_, ModelField::Name) => entry.name.clone(),
+            (ModelBackend::Llamafile { url, .. }, ModelField::Url) => url.clone(),
+            (ModelBackend::Llamafile { filename, .. }, ModelField::Filename) => filename.clone(),
+            (ModelBackend::Api { base_url, .. }, ModelField::BaseUrl) => base_url.clone(),
+            (ModelBackend::Api { api_key, .. }, ModelField::ApiKey) => api_key.clone(),
+            (ModelBackend::Api { model, .. }, ModelField::Model) => model.clone(),
+            _ => String::new(),
+        }
+    }
+
+    /// Save the current model list to the config and disk.
+    pub fn save(&self) -> Config {
+        let config = Config {
+            models: self.models.clone(),
+        };
+        let _ = crate::config::save_config(&config);
+        config
+    }
+
+    /// Insert a character at the cursor position.
+    pub fn input_insert(&mut self, ch: char) {
+        self.input_buf.insert(self.input_cursor, ch);
+        self.input_cursor += ch.len_utf8();
+    }
+
+    /// Delete the character before the cursor.
+    pub fn input_backspace(&mut self) {
+        if self.input_cursor > 0 {
+            // Find the previous char boundary.
+            let prev = self.input_buf[..self.input_cursor]
+                .char_indices()
+                .next_back()
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+            self.input_buf.drain(prev..self.input_cursor);
+            self.input_cursor = prev;
+        }
+    }
+
+    /// Delete the character at the cursor.
+    pub fn input_delete(&mut self) {
+        if self.input_cursor < self.input_buf.len() {
+            let next = self.input_buf[self.input_cursor..]
+                .char_indices()
+                .nth(1)
+                .map(|(i, _)| self.input_cursor + i)
+                .unwrap_or(self.input_buf.len());
+            self.input_buf.drain(self.input_cursor..next);
+        }
+    }
+
+    /// Move cursor left by one character.
+    pub fn input_left(&mut self) {
+        if self.input_cursor > 0 {
+            self.input_cursor = self.input_buf[..self.input_cursor]
+                .char_indices()
+                .next_back()
+                .map(|(i, _)| i)
+                .unwrap_or(0);
+        }
+    }
+
+    /// Move cursor right by one character.
+    pub fn input_right(&mut self) {
+        if self.input_cursor < self.input_buf.len() {
+            self.input_cursor = self.input_buf[self.input_cursor..]
+                .char_indices()
+                .nth(1)
+                .map(|(i, _)| self.input_cursor + i)
+                .unwrap_or(self.input_buf.len());
+        }
     }
 }
 
@@ -457,14 +681,18 @@ pub fn draw_new_game(f: &mut Frame, state: &NewGameState) {
 
     // AI Model.
     let ms_y = bl_y + 1;
-    let ms_focused = matches!(state.focus, NewGameFocus::ModelSize);
+    let ms_focused = matches!(state.focus, NewGameFocus::AiModel);
     draw_toggle_row(
         f,
         x_start,
         ms_y,
         content_width,
         "AI Model",
-        state.llamafile_model.display_name(),
+        state
+            .model_names
+            .get(state.model_index)
+            .map(|s| s.as_str())
+            .unwrap_or("(none)"),
         ms_focused,
     );
 
@@ -645,6 +873,163 @@ pub fn draw_llamafile_setup(f: &mut Frame, state: &LlamafileSetupState) {
     let hint_text = match &state.status {
         LlamafileStatus::Error(_) => "Esc: go back",
         _ => "Esc: cancel",
+    };
+    let hint = Paragraph::new(hint_text)
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray));
+    f.render_widget(hint, hint_area);
+}
+
+/// Draw the settings screen (model registry).
+pub fn draw_settings(f: &mut Frame, state: &SettingsState) {
+    let area = f.area();
+    f.render_widget(Clear, area);
+
+    let content_width = 70u16.min(area.width.saturating_sub(4));
+    let x_start = area.x + (area.width.saturating_sub(content_width)) / 2;
+
+    // Title.
+    let title_area = Rect::new(x_start, area.y + 1, content_width, 1);
+    let title = Paragraph::new("Settings")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::Yellow).bold());
+    f.render_widget(title, title_area);
+
+    // Section header.
+    let section_y = area.y + 3;
+    let section_area = Rect::new(x_start, section_y, content_width, 1);
+    let section = Paragraph::new("MODELS").style(Style::default().fg(Color::DarkGray).bold());
+    f.render_widget(section, section_area);
+
+    // Model list.
+    let list_y = section_y + 2;
+    if state.models.is_empty() {
+        let empty_area = Rect::new(x_start, list_y, content_width, 1);
+        let empty = Paragraph::new(
+            "    No models configured. Press [a] to add a llamafile or [A] to add an API model.",
+        )
+        .style(Style::default().fg(Color::DarkGray));
+        f.render_widget(empty, empty_area);
+    } else {
+        let max_visible = (area.height.saturating_sub(list_y + 8)) as usize;
+        for (i, entry) in state.models.iter().enumerate() {
+            if i >= max_visible {
+                break;
+            }
+            let row_y = list_y + i as u16;
+            let row_area = Rect::new(x_start, row_y, content_width, 1);
+            let is_focused = state.selected == i && matches!(state.focus, SettingsFocus::ModelList);
+
+            let marker = if state.selected == i { ">" } else { " " };
+            let backend_label = match &entry.backend {
+                ModelBackend::Llamafile { .. } => "Llamafile",
+                ModelBackend::Api { .. } => "API",
+            };
+
+            let name_style = if is_focused {
+                Style::default().fg(Color::Black).bg(Color::Cyan).bold()
+            } else {
+                Style::default().fg(Color::White)
+            };
+
+            let line = Line::from(vec![
+                Span::styled(
+                    format!("  {} {}  ", marker, i + 1),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(format!("{:<40}", truncate_str(&entry.name, 40)), name_style),
+                Span::styled(
+                    backend_label.to_string(),
+                    Style::default().fg(Color::DarkGray),
+                ),
+            ]);
+            Paragraph::new(line).render(row_area, f.buffer_mut());
+        }
+    }
+
+    // Edit form (when editing a field).
+    if let SettingsFocus::EditField(active_field) = state.focus {
+        if let Some(entry) = state.models.get(state.selected) {
+            let form_y = list_y + state.models.len().min(10) as u16 + 1;
+            let fields = ModelField::fields_for(&entry.backend);
+
+            // Section divider.
+            let div_area = Rect::new(x_start, form_y, content_width, 1);
+            let div_text = format!("  Edit: {} ", truncate_str(&entry.name, 40));
+            let div = Paragraph::new(div_text).style(Style::default().fg(Color::Yellow).bold());
+            f.render_widget(div, div_area);
+
+            for (fi, &field) in fields.iter().enumerate() {
+                let field_y = form_y + 1 + fi as u16;
+                if field_y >= area.y + area.height - 2 {
+                    break;
+                }
+                let field_area = Rect::new(x_start, field_y, content_width, 1);
+                let is_active = field == active_field;
+
+                let value_str = if is_active {
+                    // Show input buffer with cursor.
+                    let before = &state.input_buf[..state.input_cursor];
+                    let after = &state.input_buf[state.input_cursor..];
+                    format!("{}|{}", before, after)
+                } else {
+                    let val = SettingsState::field_value(entry, field);
+                    if field == ModelField::ApiKey && !val.is_empty() {
+                        // Mask API key when not editing.
+                        let visible = val.len().min(4);
+                        format!(
+                            "{}{}",
+                            &val[..visible],
+                            "*".repeat(val.len().saturating_sub(visible))
+                        )
+                    } else {
+                        val
+                    }
+                };
+
+                let value_style = if is_active {
+                    Style::default().fg(Color::Black).bg(Color::Cyan)
+                } else {
+                    Style::default().fg(Color::White)
+                };
+
+                let line = Line::from(vec![
+                    Span::styled(
+                        format!("    {:<12}", field.label()),
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                    Span::styled(truncate_str(&value_str, 50).to_string(), value_style),
+                ]);
+                Paragraph::new(line).render(field_area, f.buffer_mut());
+            }
+        }
+    }
+
+    // Delete confirmation.
+    if matches!(state.focus, SettingsFocus::ConfirmDelete) {
+        if let Some(entry) = state.models.get(state.selected) {
+            let confirm_y = list_y + state.models.len().min(10) as u16 + 1;
+            let confirm_area = Rect::new(x_start, confirm_y, content_width, 1);
+            let confirm = Paragraph::new(format!(
+                "  Delete \"{}\"? [y] yes  [n] no",
+                truncate_str(&entry.name, 30)
+            ))
+            .style(Style::default().fg(Color::Red).bold());
+            f.render_widget(confirm, confirm_area);
+        }
+    }
+
+    // Hint bar.
+    let hint_y = area.y + area.height - 1;
+    let hint_area = Rect::new(area.x, hint_y, area.width, 1);
+    let hint_text = match state.focus {
+        SettingsFocus::ModelList => {
+            "\u{2191}\u{2193}: move  |  Enter: edit  |  [a] add llamafile  [A] add API  [d] delete  |  Esc: back"
+        }
+        SettingsFocus::EditField(_) => {
+            "Type to edit  |  Enter/Tab: next field  |  Esc: cancel"
+        }
+        SettingsFocus::ConfirmDelete => "[y] confirm  [n] cancel",
     };
     let hint = Paragraph::new(hint_text)
         .alignment(Alignment::Center)

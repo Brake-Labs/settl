@@ -55,15 +55,17 @@ pub fn llamafile_path(model: LlamafileModel) -> PathBuf {
     llamafile_dir().join(model.filename())
 }
 
-/// Ensure the llamafile exists on disk. Downloads it if missing or corrupted.
+/// Ensure a llamafile exists on disk. Downloads from the given URL if missing or corrupted.
 ///
+/// This is the general version that accepts explicit URL and filename parameters.
 /// Sends progress updates through `status_tx`. The file is downloaded to a
 /// `.tmp` file first and atomically renamed on completion.
-pub async fn ensure_llamafile(
-    model: LlamafileModel,
+pub async fn ensure_llamafile_custom(
+    url: &str,
+    filename: &str,
     status_tx: mpsc::UnboundedSender<LlamafileStatus>,
 ) -> Result<PathBuf, String> {
-    let path = llamafile_path(model);
+    let path = llamafile_dir().join(filename);
 
     let _ = status_tx.send(LlamafileStatus::Checking);
 
@@ -83,23 +85,21 @@ pub async fn ensure_llamafile(
     std::fs::create_dir_all(&dir)
         .map_err(|e| format!("Failed to create directory {}: {}", dir.display(), e))?;
 
-    let tmp_path = dir.join(format!("{}.tmp", model.filename()));
+    let tmp_path = dir.join(format!("{}.tmp", filename));
 
     let _ = status_tx.send(LlamafileStatus::Downloading { bytes: 0, total: 0 });
 
-    let response = reqwest::get(model.url())
+    let response = reqwest::get(url)
         .await
         .map_err(|e| format!("Download failed: {}", e))?;
 
     let status = response.status();
-    let url = model.url();
     log::debug!("download response: status={status} url={url}");
 
     if !status.is_success() {
         return Err(format!(
             "Download failed: server returned {} for {}",
-            status,
-            model.url(),
+            status, url,
         ));
     }
 
@@ -172,6 +172,14 @@ pub async fn ensure_llamafile(
     std::fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to rename temp file: {}", e))?;
 
     Ok(path)
+}
+
+/// Ensure a built-in llamafile model exists on disk. Thin wrapper around `ensure_llamafile_custom`.
+pub async fn ensure_llamafile(
+    model: LlamafileModel,
+    status_tx: mpsc::UnboundedSender<LlamafileStatus>,
+) -> Result<PathBuf, String> {
+    ensure_llamafile_custom(model.url(), model.filename(), status_tx).await
 }
 
 #[cfg(test)]
