@@ -37,6 +37,17 @@ fn snapshot_post_game() {
     insta::assert_snapshot!("post_game", buffer_to_string(&buf));
 }
 
+// ── Size warning overlay ─────────────────────────────────────────────
+
+#[test]
+fn snapshot_size_warning() {
+    // Render at a small size so the warning popup appears.
+    let mut app = make_test_app(Screen::MainMenu(MainMenuState { selected: 0 }));
+    app.show_size_warning = true;
+    let buf = render_app_to_buffer(&mut app, 80, 24);
+    insta::assert_snapshot!("size_warning", buffer_to_string(&buf));
+}
+
 // ── Playing screen: various input modes ──────────────────────────────
 
 #[test]

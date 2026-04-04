@@ -25,6 +25,7 @@ use crossterm::terminal::{
 };
 use crossterm::ExecutableCommand;
 use ratatui::prelude::*;
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Wrap};
 use tokio::sync::mpsc;
 
 use crate::game::board::Board;
@@ -454,12 +455,19 @@ impl PlayingState {
     }
 }
 
+/// Minimum terminal width for a good experience (from DESIGN.md).
+pub const MIN_TERM_WIDTH: u16 = 130;
+/// Minimum terminal height for a good experience (from DESIGN.md).
+pub const MIN_TERM_HEIGHT: u16 = 60;
+
 /// Top-level app -- holds the current screen and shared config.
 pub struct App {
     pub screen: Screen,
     pub personalities: Vec<Personality>,
     /// Running llamafile process, if any. Survives across "Play Again" restarts.
     pub llamafile_process: Option<crate::llamafile::LlamafileProcess>,
+    /// Whether to show the terminal-too-small warning popup.
+    pub show_size_warning: bool,
 }
 
 // ── Main Entry Point ───────────────────────────────────────────────────
@@ -481,10 +489,14 @@ pub async fn run_app() -> io::Result<()> {
         original_hook(info);
     }));
 
+    let size = terminal.size()?;
+    let show_size_warning = size.width < MIN_TERM_WIDTH || size.height < MIN_TERM_HEIGHT;
+
     let mut app = App {
         screen: Screen::MainMenu(MainMenuState::new()),
         personalities,
         llamafile_process: None,
+        show_size_warning,
     };
 
     let result = run_event_loop(&mut terminal, &mut app).await;
@@ -503,7 +515,12 @@ async fn run_event_loop(
 ) -> io::Result<()> {
     loop {
         // Draw.
-        terminal.draw(|f| draw_screen(f, &app.screen))?;
+        terminal.draw(|f| {
+            draw_screen(f, &app.screen);
+            if app.show_size_warning {
+                draw_size_warning(f);
+            }
+        })?;
 
         // Poll timeout depends on screen type.
         let timeout = match &app.screen {
@@ -618,6 +635,52 @@ fn draw_screen(f: &mut Frame, screen: &Screen) {
     }
 }
 
+// ── Size Warning Overlay ──────────────────────────────────────────────
+
+/// Draw a centered warning popup when the terminal is smaller than the minimum.
+fn draw_size_warning(f: &mut Frame) {
+    let area = f.area();
+    let popup_w = 52u16.min(area.width.saturating_sub(2));
+    let popup_h = 9u16.min(area.height.saturating_sub(2));
+    let x = area.x + (area.width.saturating_sub(popup_w)) / 2;
+    let y = area.y + (area.height.saturating_sub(popup_h)) / 2;
+    let overlay = Rect::new(x, y, popup_w, popup_h);
+
+    f.render_widget(Clear, overlay);
+
+    let block = Block::default()
+        .title(" Terminal Too Small ")
+        .title_alignment(Alignment::Center)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Yellow));
+    let inner = block.inner(overlay);
+    f.render_widget(block, overlay);
+
+    let text = vec![
+        Line::from(""),
+        Line::from(Span::styled(
+            format!("  Current size: {}x{}", area.width, area.height),
+            Style::default().fg(Color::Red).bold(),
+        )),
+        Line::from(Span::styled(
+            format!("  Minimum size: {}x{}", MIN_TERM_WIDTH, MIN_TERM_HEIGHT),
+            Style::default().fg(Color::White),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Resize your terminal for the best experience.",
+            Style::default().fg(Color::DarkGray),
+        )),
+        Line::from(""),
+        Line::from(Span::styled(
+            "  Press any key to continue...",
+            Style::default().fg(Color::DarkGray),
+        )),
+    ];
+    let para = Paragraph::new(text).wrap(Wrap { trim: false });
+    f.render_widget(para, inner);
+}
+
 // ── Input Dispatch ─────────────────────────────────────────────────────
 
 #[allow(clippy::large_enum_variant)]
@@ -629,6 +692,10 @@ enum Action {
 }
 
 fn handle_input(app: &mut App, key: KeyCode) -> Action {
+    if app.show_size_warning {
+        app.show_size_warning = false;
+        return Action::None;
+    }
     match &mut app.screen {
         Screen::MainMenu(state) => {
             let items = state.menu_items();
