@@ -1,6 +1,7 @@
 pub mod config;
 pub mod game;
 pub mod headless;
+pub mod hooks;
 pub mod llamafile;
 pub mod logging;
 pub mod player;

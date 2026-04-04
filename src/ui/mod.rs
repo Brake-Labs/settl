@@ -1451,9 +1451,11 @@ fn launch_game(
         .unwrap_or_default();
 
     // Spawn game engine.
+    let hooks = config.hooks.clone();
     tokio::spawn(async move {
         let mut orchestrator = GameOrchestrator::new(state, players);
         orchestrator.ui_tx = Some(tx);
+        orchestrator.hooks = hooks;
         orchestrator.player_configs = save_configs;
         orchestrator.model_name = model_name;
 
@@ -1561,9 +1563,11 @@ fn resume_game(
     let events = save.events;
     let state = save.game_state;
 
+    let hooks = config.hooks.clone();
     tokio::spawn(async move {
         let mut orchestrator = GameOrchestrator::new(state, players);
         orchestrator.ui_tx = Some(tx);
+        orchestrator.hooks = hooks;
         orchestrator.player_configs = save_configs;
         orchestrator.model_name = model_name;
         orchestrator.events = events;
