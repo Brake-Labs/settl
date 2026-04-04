@@ -1,11 +1,20 @@
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
 use tokio::process::{Child, Command};
+
+/// Maximum number of stderr lines to retain in memory.
+const MAX_LOG_LINES: usize = 500;
+
+/// Shared buffer of llamafile stderr log lines.
+pub type LogBuffer = Arc<Mutex<Vec<String>>>;
 
 /// Owns a running llamafile child process. Kills it on drop.
 pub struct LlamafileProcess {
     child: Child,
     pub port: u16,
+    /// Buffered stderr output, updated by a background reader task.
+    pub log_buffer: LogBuffer,
 }
 
 impl LlamafileProcess {
@@ -101,7 +110,12 @@ impl LlamafileProcess {
                 .map_err(|e| format!("Failed to spawn llamafile: {}", e))?
         };
 
-        let mut process = Self { child, port };
+        let log_buffer: LogBuffer = Arc::new(Mutex::new(Vec::new()));
+        let mut process = Self {
+            child,
+            port,
+            log_buffer: Arc::clone(&log_buffer),
+        };
 
         let url = format!("http://127.0.0.1:{}/health", port);
         let client = reqwest::Client::new();
@@ -150,6 +164,10 @@ impl LlamafileProcess {
             match client.get(&url).send().await {
                 Ok(resp) if resp.status().is_success() => {
                     log::debug!("  server ready on port {port}");
+                    // Spawn background task to read stderr into the shared log buffer.
+                    if let Some(stderr) = process.child.stderr.take() {
+                        spawn_stderr_reader(stderr, Arc::clone(&log_buffer));
+                    }
                     return Ok(process);
                 }
                 _ => {
@@ -192,6 +210,25 @@ impl Drop for LlamafileProcess {
     }
 }
 
+/// Spawn a background task that reads lines from stderr and appends to the buffer.
+fn spawn_stderr_reader(stderr: tokio::process::ChildStderr, buffer: LogBuffer) {
+    use tokio::io::{AsyncBufReadExt, BufReader};
+
+    tokio::spawn(async move {
+        let reader = BufReader::new(stderr);
+        let mut lines = reader.lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            if let Ok(mut buf) = buffer.lock() {
+                buf.push(line);
+                if buf.len() > MAX_LOG_LINES {
+                    let excess = buf.len() - MAX_LOG_LINES;
+                    buf.drain(..excess);
+                }
+            }
+        }
+    });
+}
+
 /// Check if a TCP port is available by attempting to bind to it.
 fn is_port_available(port: u16) -> bool {
     std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
@@ -217,7 +254,11 @@ mod tests {
             "process should be alive before drop"
         );
 
-        let process = LlamafileProcess { child, port: 0 };
+        let process = LlamafileProcess {
+            child,
+            port: 0,
+            log_buffer: Arc::new(Mutex::new(Vec::new())),
+        };
         drop(process);
 
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;

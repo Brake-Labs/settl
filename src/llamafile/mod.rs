@@ -2,7 +2,7 @@ pub mod download;
 pub mod process;
 
 pub use download::{ensure_llamafile, ensure_llamafile_custom, LlamafileModel};
-pub use process::LlamafileProcess;
+pub use process::{LlamafileProcess, LogBuffer};
 
 /// Status updates sent from the llamafile setup task to the UI.
 #[derive(Debug, Clone)]

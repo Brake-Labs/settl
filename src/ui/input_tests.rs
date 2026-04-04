@@ -991,6 +991,41 @@ fn spectating_tab_toggles_ai_panel() {
 }
 
 #[test]
+fn spectating_l_toggles_llamafile_log() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
+    // Set a log buffer so the L key is active.
+    ps.llamafile_log = Some(std::sync::Arc::new(std::sync::Mutex::new(vec![
+        "test log line".into(),
+    ])));
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('L'));
+    assert!(match &app.screen {
+        Screen::Playing(ps) => ps.show_llamafile_log,
+        _ => panic!(),
+    });
+
+    handle_input(&mut app, KeyCode::Char('L'));
+    assert!(!match &app.screen {
+        Screen::Playing(ps) => ps.show_llamafile_log,
+        _ => panic!(),
+    });
+}
+
+#[test]
+fn spectating_l_ignored_without_llamafile() {
+    let (ps, _rx) = make_test_playing_state(InputMode::Spectating);
+    // No llamafile_log set (None) -- L should do nothing.
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('L'));
+    assert!(!match &app.screen {
+        Screen::Playing(ps) => ps.show_llamafile_log,
+        _ => panic!(),
+    });
+}
+
+#[test]
 fn spectating_jk_scrolls_chat_when_ai_panel_visible() {
     let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
     ps.show_ai_panel = true;
