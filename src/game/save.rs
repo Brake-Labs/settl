@@ -78,8 +78,12 @@ mod tests {
     use crate::game::board::Board;
 
     /// Use a temp directory instead of ~/.settl/saves for tests.
+    /// Each call uses a unique ID to avoid races when tests run in parallel.
     fn save_roundtrip_in_tempdir() -> (SaveFile, SaveFile) {
-        let dir = std::env::temp_dir().join(format!("settl_test_{}", std::process::id()));
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join(format!("settl_test_{}_{id}", std::process::id()));
         let _ = std::fs::create_dir_all(&dir);
         let path = dir.join("test_autosave.json");
 
