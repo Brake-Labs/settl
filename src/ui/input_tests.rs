@@ -916,6 +916,28 @@ fn spectating_tab_toggles_ai_panel() {
 }
 
 #[test]
+fn spectating_jk_scrolls_chat_when_ai_panel_visible() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
+    ps.show_ai_panel = true;
+    ps.chat_scroll = 5;
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('j'));
+    let chat_scroll = match &app.screen {
+        Screen::Playing(ps) => ps.chat_scroll,
+        _ => panic!(),
+    };
+    assert_eq!(chat_scroll, 6);
+
+    handle_input(&mut app, KeyCode::Char('k'));
+    let chat_scroll = match &app.screen {
+        Screen::Playing(ps) => ps.chat_scroll,
+        _ => panic!(),
+    };
+    assert_eq!(chat_scroll, 5);
+}
+
+#[test]
 fn spectating_q_returns_to_main_menu() {
     let (ps, _rx) = make_test_playing_state(InputMode::Spectating);
     let mut app = make_test_app(Screen::Playing(ps));
