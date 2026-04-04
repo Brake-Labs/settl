@@ -10,6 +10,27 @@ use super::screens::*;
 use super::testing::*;
 use super::*;
 
+// ── Size Warning ────────────────────────────────────────────────────
+
+#[test]
+fn size_warning_dismissed_on_any_key() {
+    let mut app = main_menu_app();
+    app.show_size_warning = true;
+    let action = handle_input(&mut app, KeyCode::Enter);
+    assert!(matches!(action, Action::None));
+    assert!(!app.show_size_warning);
+}
+
+#[test]
+fn size_warning_blocks_underlying_input() {
+    let mut app = main_menu_app();
+    app.show_size_warning = true;
+    // 'q' would normally quit from the main menu, but the warning intercepts it.
+    let action = handle_input(&mut app, KeyCode::Char('q'));
+    assert!(matches!(action, Action::None));
+    assert!(!app.show_size_warning);
+}
+
 // ── Main Menu ────────────────────────────────────────────────────────
 
 #[test]

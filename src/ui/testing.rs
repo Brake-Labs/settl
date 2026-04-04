@@ -53,7 +53,14 @@ pub fn test_action_choices_minimal() -> Vec<PlayerChoice> {
 pub fn render_app_to_buffer(app: &mut App, width: u16, height: u16) -> Buffer {
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).unwrap();
-    terminal.draw(|f| draw_screen(f, &app.screen)).unwrap();
+    terminal
+        .draw(|f| {
+            draw_screen(f, &app.screen);
+            if app.show_size_warning {
+                draw_size_warning(f);
+            }
+        })
+        .unwrap();
     terminal.backend().buffer().clone()
 }
 
@@ -119,6 +126,7 @@ pub fn make_test_app(screen: Screen) -> App {
         screen,
         personalities: vec![],
         llamafile_process: None,
+        show_size_warning: false,
     }
 }
 
