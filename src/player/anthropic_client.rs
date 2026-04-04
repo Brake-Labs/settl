@@ -26,6 +26,9 @@ pub struct MessagesRequest {
     pub tools: Vec<ToolDef>,
     /// Enable streaming (SSE) responses.
     pub stream: bool,
+    /// Output configuration (effort level).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output_config: Option<OutputConfig>,
     // -- llamafile extensions (omitted when None) --
     /// Assign this request to a specific KV cache slot.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -33,6 +36,12 @@ pub struct MessagesRequest {
     /// Reuse the KV cache from a previous request in this slot.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cache_prompt: Option<bool>,
+}
+
+/// Output configuration for controlling reasoning effort.
+#[derive(Debug, Clone, Serialize)]
+pub struct OutputConfig {
+    pub effort: String,
 }
 
 impl MessagesRequest {
@@ -44,6 +53,7 @@ impl MessagesRequest {
             messages: Vec::new(),
             tools: Vec::new(),
             stream: false,
+            output_config: None,
             id_slot: None,
             cache_prompt: None,
         }

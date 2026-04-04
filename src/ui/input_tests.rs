@@ -146,6 +146,11 @@ fn new_game_focus_navigation() {
     if let Screen::NewGame(ref state) = app.screen {
         assert_eq!(state.focus, NewGameFocus::AiModel);
     }
+    // Down to ReasoningEffort.
+    handle_input(&mut app, KeyCode::Down);
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.focus, NewGameFocus::ReasoningEffort);
+    }
     // Down to StartButton.
     handle_input(&mut app, KeyCode::Down);
     if let Screen::NewGame(ref state) = app.screen {
@@ -276,6 +281,53 @@ fn new_game_model_toggle() {
     handle_input(&mut app, KeyCode::Right);
     if let Screen::NewGame(ref state) = app.screen {
         assert_eq!(state.model_index, 0);
+    }
+}
+
+#[test]
+fn new_game_reasoning_effort_toggle() {
+    let mut app = new_game_app();
+    if let Screen::NewGame(ref mut state) = app.screen {
+        state.focus = NewGameFocus::ReasoningEffort;
+    }
+    // Default effort is "low" (index 0).
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.effort_index, crate::config::DEFAULT_EFFORT_INDEX);
+        assert_eq!(state.effort_index, 0);
+    }
+    // Cycle forward: low -> medium.
+    handle_input(&mut app, KeyCode::Right);
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.effort_index, 1);
+    }
+    // Cycle forward: medium -> high.
+    handle_input(&mut app, KeyCode::Right);
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.effort_index, 2);
+    }
+    // Cycle backward: high -> medium.
+    handle_input(&mut app, KeyCode::Left);
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.effort_index, 1);
+    }
+}
+
+#[test]
+fn new_game_reasoning_effort_updates_all_players() {
+    let mut app = new_game_app();
+    if let Screen::NewGame(ref mut state) = app.screen {
+        state.focus = NewGameFocus::ReasoningEffort;
+    }
+    // Cycle to "medium" (index 1).
+    handle_input(&mut app, KeyCode::Right); // low -> medium
+    if let Screen::NewGame(ref state) = app.screen {
+        // All AI players should have effort_index 1.
+        for player in &state.players[1..] {
+            assert_eq!(
+                player.effort_index, 1,
+                "AI player should have medium effort"
+            );
+        }
     }
 }
 

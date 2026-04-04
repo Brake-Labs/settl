@@ -208,8 +208,8 @@ fn screen_navigation_new_game_configure_and_start() {
 
     // Navigate down to the start button.
     // Default focus is PlayerCount.
-    // Down x7: PlayerCount -> P2 -> P3 -> P4 -> FriendlyRobber -> BoardLayout -> AiModel -> StartButton.
-    for _ in 0..7 {
+    // Down x8: PlayerCount -> P2 -> P3 -> P4 -> FriendlyRobber -> BoardLayout -> AiModel -> ReasoningEffort -> StartButton.
+    for _ in 0..8 {
         handle_input(&mut app, KeyCode::Down);
     }
 

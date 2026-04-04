@@ -39,16 +39,30 @@ pub enum ModelBackend {
     },
 }
 
+/// Valid effort levels for the Anthropic Messages API.
+pub const EFFORT_LEVELS: &[&str] = &["low", "medium", "high", "max"];
+
+/// Default effort level index (points to "low" in EFFORT_LEVELS).
+pub const DEFAULT_EFFORT_INDEX: usize = 0;
+
 /// Top-level application config.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Registered AI models.
     pub models: Vec<ModelEntry>,
+    /// Default reasoning effort level for AI players.
+    #[serde(default = "default_effort")]
+    pub default_effort: String,
+}
+
+pub fn default_effort() -> String {
+    EFFORT_LEVELS[DEFAULT_EFFORT_INDEX].to_string()
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
+            default_effort: default_effort(),
             models: vec![
                 ModelEntry {
                     name: "Bonsai 1.7B (fast)".into(),
@@ -113,6 +127,7 @@ mod tests {
     #[test]
     fn roundtrip_toml() {
         let config = Config {
+            default_effort: default_effort(),
             models: vec![
                 ModelEntry {
                     name: "Test Llamafile".into(),
