@@ -1,3 +1,4 @@
+pub mod anthropic_api;
 pub mod config;
 pub mod game;
 pub mod headless;

@@ -69,6 +69,30 @@ impl Default for Config {
     }
 }
 
+impl Config {
+    /// Merge auto-discovered Anthropic API models into the registry.
+    ///
+    /// Adds new models and updates existing ones (matched by model ID).
+    /// Discovered models are ephemeral -- they are not persisted to disk.
+    pub fn merge_anthropic_models(&mut self, entries: Vec<ModelEntry>) {
+        for entry in entries {
+            let model_id = match &entry.backend {
+                ModelBackend::Api { model, .. } => model.clone(),
+                _ => continue,
+            };
+            // Update if a model with the same API model ID already exists.
+            if let Some(existing) = self.models.iter_mut().find(
+                |m| matches!(&m.backend, ModelBackend::Api { model, .. } if *model == model_id),
+            ) {
+                existing.name = entry.name;
+                existing.backend = entry.backend;
+            } else {
+                self.models.push(entry);
+            }
+        }
+    }
+}
+
 /// Return the path to `~/.settl/config.toml`.
 pub fn config_path() -> PathBuf {
     let home = std::env::var("HOME")
@@ -159,5 +183,72 @@ mod tests {
             }
             _ => panic!("Expected Api backend"),
         }
+    }
+
+    #[test]
+    fn merge_anthropic_models_adds_new() {
+        let mut config = Config::default();
+        assert_eq!(config.models.len(), 2);
+
+        let entries = vec![ModelEntry {
+            name: "Claude Sonnet 4".into(),
+            backend: ModelBackend::Api {
+                base_url: "https://api.anthropic.com".into(),
+                api_key: "sk-test".into(),
+                model: "claude-sonnet-4-20250514".into(),
+            },
+        }];
+        config.merge_anthropic_models(entries);
+        assert_eq!(config.models.len(), 3);
+        assert_eq!(config.models[2].name, "Claude Sonnet 4");
+    }
+
+    #[test]
+    fn merge_anthropic_models_updates_existing() {
+        let mut config = Config {
+            models: vec![ModelEntry {
+                name: "Old Name".into(),
+                backend: ModelBackend::Api {
+                    base_url: "https://api.anthropic.com".into(),
+                    api_key: "sk-old".into(),
+                    model: "claude-sonnet-4-20250514".into(),
+                },
+            }],
+        };
+
+        let entries = vec![ModelEntry {
+            name: "Claude Sonnet 4".into(),
+            backend: ModelBackend::Api {
+                base_url: "https://api.anthropic.com".into(),
+                api_key: "sk-new".into(),
+                model: "claude-sonnet-4-20250514".into(),
+            },
+        }];
+        config.merge_anthropic_models(entries);
+
+        // Should update, not duplicate.
+        assert_eq!(config.models.len(), 1);
+        assert_eq!(config.models[0].name, "Claude Sonnet 4");
+        match &config.models[0].backend {
+            ModelBackend::Api { api_key, .. } => assert_eq!(api_key, "sk-new"),
+            _ => panic!("Expected Api backend"),
+        }
+    }
+
+    #[test]
+    fn merge_anthropic_models_ignores_llamafile_entries() {
+        let mut config = Config::default();
+        let initial_count = config.models.len();
+
+        // Passing a llamafile entry should be ignored.
+        let entries = vec![ModelEntry {
+            name: "Not an API model".into(),
+            backend: ModelBackend::Llamafile {
+                url: "https://example.com".into(),
+                filename: "test.llamafile".into(),
+            },
+        }];
+        config.merge_anthropic_models(entries);
+        assert_eq!(config.models.len(), initial_count);
     }
 }
