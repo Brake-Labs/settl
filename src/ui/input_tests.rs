@@ -155,6 +155,11 @@ fn new_game_focus_navigation() {
     if let Screen::NewGame(ref state) = app.screen {
         assert_eq!(state.focus, NewGameFocus::AiModel);
     }
+    // Down to ReasoningEffort.
+    handle_input(&mut app, KeyCode::Down);
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.focus, NewGameFocus::ReasoningEffort);
+    }
 }
 
 #[test]
@@ -285,6 +290,57 @@ fn new_game_model_toggle() {
 }
 
 #[test]
+fn new_game_reasoning_effort_toggle() {
+    let mut app = new_game_app();
+    if let Screen::NewGame(ref mut state) = app.screen {
+        state.focus = NewGameFocus::ReasoningEffort;
+    }
+    // Default effort_index should be 0 ("low").
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.effort_index, 0);
+    }
+    // Cycle forward: low -> medium.
+    handle_input(&mut app, KeyCode::Right);
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.effort_index, 1);
+    }
+    // Cycle forward: medium -> high.
+    handle_input(&mut app, KeyCode::Right);
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.effort_index, 2);
+    }
+    // Cycle backward: high -> medium.
+    handle_input(&mut app, KeyCode::Left);
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.effort_index, 1);
+    }
+}
+
+#[test]
+fn new_game_reasoning_effort_updates_all_players() {
+    let mut app = new_game_app();
+    if let Screen::NewGame(ref mut state) = app.screen {
+        state.focus = NewGameFocus::ReasoningEffort;
+    }
+    // Cycle forward twice to get to "high" (index 2).
+    handle_input(&mut app, KeyCode::Right);
+    handle_input(&mut app, KeyCode::Right);
+    if let Screen::NewGame(ref state) = app.screen {
+        assert_eq!(state.effort_index, 2);
+        // All AI players should have updated effort_index.
+        for p in &state.players {
+            if p.kind == PlayerKind::Llamafile {
+                assert_eq!(
+                    p.effort_index, 2,
+                    "AI player {} should have effort_index=2",
+                    p.name
+                );
+            }
+        }
+    }
+}
+
+#[test]
 fn new_game_enter_starts_game_from_any_focus() {
     // Enter should trigger StartGame regardless of which row is focused.
     for focus in &[
@@ -294,6 +350,7 @@ fn new_game_enter_starts_game_from_any_focus() {
         NewGameFocus::FriendlyRobber,
         NewGameFocus::BoardLayout,
         NewGameFocus::AiModel,
+        NewGameFocus::ReasoningEffort,
     ] {
         let mut app = new_game_app();
         if let Screen::NewGame(ref mut state) = app.screen {

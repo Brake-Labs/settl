@@ -39,11 +39,25 @@ pub enum ModelBackend {
     },
 }
 
+/// Valid effort levels for the Anthropic Messages API.
+pub const EFFORT_LEVELS: &[&str] = &["low", "medium", "high", "max"];
+
+/// Default effort level index (points to "low" in EFFORT_LEVELS).
+pub const DEFAULT_EFFORT_INDEX: usize = 0;
+
+/// Return the default effort level string.
+pub fn default_effort() -> String {
+    EFFORT_LEVELS[DEFAULT_EFFORT_INDEX].to_string()
+}
+
 /// Top-level application config.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     /// Registered AI models.
     pub models: Vec<ModelEntry>,
+    /// Default reasoning effort level for AI players.
+    #[serde(default = "default_effort")]
+    pub default_effort: String,
 }
 
 impl Default for Config {
@@ -65,6 +79,7 @@ impl Default for Config {
                     },
                 },
             ],
+            default_effort: default_effort(),
         }
     }
 }
@@ -154,6 +169,7 @@ mod tests {
                     },
                 },
             ],
+            default_effort: default_effort(),
         };
 
         let toml_str = toml::to_string_pretty(&config).unwrap();
@@ -214,6 +230,7 @@ mod tests {
                     model: "claude-sonnet-4-20250514".into(),
                 },
             }],
+            default_effort: default_effort(),
         };
 
         let entries = vec![ModelEntry {
