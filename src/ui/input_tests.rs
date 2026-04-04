@@ -495,7 +495,7 @@ fn action_bar_shortcut_r_selects_build_road() {
 
 #[test]
 fn action_bar_shortcut_t_selects_propose_trade() {
-    // [Settlement=0, Road=1, DevCard=2, Trade=3, EndTurn=4]
+    // [Settlement=0, Road=1, DevCard=2, Trade=3, BankTrade=4, EndTurn=5]
     let (ps, mut rx) = make_test_playing_state(InputMode::ActionBar {
         choices: test_action_choices(),
         selected: 0,
@@ -510,7 +510,7 @@ fn action_bar_shortcut_t_selects_propose_trade() {
 
 #[test]
 fn action_bar_shortcut_d_selects_buy_dev_card() {
-    // [Settlement=0, Road=1, DevCard=2, Trade=3, EndTurn=4]
+    // [Settlement=0, Road=1, DevCard=2, Trade=3, BankTrade=4, EndTurn=5]
     let (ps, mut rx) = make_test_playing_state(InputMode::ActionBar {
         choices: test_action_choices(),
         selected: 0,
@@ -521,6 +521,24 @@ fn action_bar_shortcut_d_selects_buy_dev_card() {
 
     let resp = rx.try_recv().unwrap();
     assert!(matches!(resp, HumanResponse::Index(2)));
+}
+
+#[test]
+fn action_bar_shortcut_b_selects_bank_trade() {
+    // [Settlement=0, Road=1, DevCard=2, Trade=3, BankTrade=4, EndTurn=5]
+    let (ps, mut rx) = make_test_playing_state(InputMode::ActionBar {
+        choices: test_action_choices(),
+        selected: 0,
+    });
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('b'));
+
+    let resp = rx.try_recv().unwrap();
+    assert!(
+        matches!(resp, HumanResponse::Index(4)),
+        "'b' should select Bank Trade (index 4)"
+    );
 }
 
 #[test]

@@ -30,6 +30,7 @@ pub fn test_action_choices() -> Vec<PlayerChoice> {
         PlayerChoice::GameAction(Action::BuildRoad(dummy_e)),
         PlayerChoice::GameAction(Action::BuyDevCard),
         PlayerChoice::ProposeTrade,
+        PlayerChoice::BankTradeIntent,
         PlayerChoice::GameAction(Action::EndTurn),
     ]
 }
