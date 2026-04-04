@@ -16,7 +16,6 @@ use super::{InputMode, PlayingState, TradeSide};
 /// Precomputed areas for the playing screen layout.
 struct PlayingLayout {
     board: Rect,
-    right_panel: Rect,
     players: Rect,
     game_log: Rect,
     context: Rect,
@@ -38,7 +37,7 @@ struct PlayingLayout {
 /// |  Status bar                                                   |
 /// +--------------------------------------------------------------+
 /// ```
-fn compute_layout(size: Rect, ps: &PlayingState) -> PlayingLayout {
+fn compute_layout(size: Rect) -> PlayingLayout {
     let main_chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -48,10 +47,9 @@ fn compute_layout(size: Rect, ps: &PlayingState) -> PlayingLayout {
         ])
         .split(size);
 
-    let right_panel_width = if ps.show_ai_panel { 38 } else { 30 };
     let top_chunks = Layout::default()
         .direction(Direction::Horizontal)
-        .constraints([Constraint::Min(107), Constraint::Length(right_panel_width)])
+        .constraints([Constraint::Min(107), Constraint::Length(30)])
         .split(main_chunks[0]);
 
     let right_split = Layout::default()
@@ -61,7 +59,6 @@ fn compute_layout(size: Rect, ps: &PlayingState) -> PlayingLayout {
 
     PlayingLayout {
         board: top_chunks[0],
-        right_panel: top_chunks[1],
         players: right_split[0],
         game_log: right_split[1],
         context: main_chunks[1],
@@ -75,17 +72,7 @@ fn compute_layout(size: Rect, ps: &PlayingState) -> PlayingLayout {
 /// Everything except the board area -- shared between text and pixel paths.
 fn draw_panels(f: &mut Frame, ps: &PlayingState, layout: &PlayingLayout) {
     if let Some(state) = &ps.state {
-        if ps.show_ai_panel {
-            chat_panel::render_chat(
-                &ps.chat_messages,
-                ps.chat_scroll,
-                layout.right_panel,
-                f.buffer_mut(),
-            );
-        } else {
-            resource_bar::render_players(state, &ps.player_names, layout.players, f.buffer_mut());
-            game_log::render_log(&ps.messages, u16::MAX, layout.game_log, f.buffer_mut());
-        }
+        resource_bar::render_players(state, &ps.player_names, layout.players, f.buffer_mut());
     } else {
         let no_players = Paragraph::new("").block(
             Block::default()
@@ -94,8 +81,8 @@ fn draw_panels(f: &mut Frame, ps: &PlayingState, layout: &PlayingLayout) {
                 .border_style(Style::default().fg(Color::Cyan)),
         );
         f.render_widget(no_players, layout.players);
-        game_log::render_log(&ps.messages, u16::MAX, layout.game_log, f.buffer_mut());
     }
+    game_log::render_log(&ps.messages, u16::MAX, layout.game_log, f.buffer_mut());
 
     draw_context_bar(f, ps, layout.context);
     draw_status_bar(f, ps, layout.status);
@@ -121,7 +108,23 @@ fn draw_board_placeholder(f: &mut Frame, area: Rect, msg: &str) {
 
 /// Draw the playing screen with text-rendered board.
 pub fn draw_playing(f: &mut Frame, ps: &PlayingState) {
-    let layout = compute_layout(f.area(), ps);
+    // Fullscreen chat mode: chat takes everything except the status bar.
+    if ps.show_ai_panel {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Length(1)])
+            .split(f.area());
+
+        chat_panel::render_chat(&ps.chat_messages, ps.chat_scroll, chunks[0], f.buffer_mut());
+        draw_status_bar(f, ps, chunks[1]);
+
+        if ps.show_help {
+            draw_help_overlay(f, f.area());
+        }
+        return;
+    }
+
+    let layout = compute_layout(f.area());
 
     if let Some(state) = &ps.state {
         if let Some(ref grid) = ps.hex_grid {

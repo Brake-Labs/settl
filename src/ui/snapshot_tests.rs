@@ -149,6 +149,29 @@ fn snapshot_playing_board_cursor() {
     insta::assert_snapshot!("playing_board_cursor", buffer_to_string(&buf));
 }
 
+// ── Fullscreen chat panel ────────────────────────────────────────────
+
+#[test]
+fn snapshot_playing_fullscreen_chat() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
+    ps.show_ai_panel = true;
+    ps.chat_messages = vec![
+        chat_panel::ChatMessage {
+            player: "Alice".into(),
+            player_id: 0,
+            text: "I should build a settlement near the wheat hex to secure early resources.".into(),
+        },
+        chat_panel::ChatMessage {
+            player: "Bob".into(),
+            player_id: 1,
+            text: "Looking at the board, the ore-wheat combo on vertex (1,0) North is the strongest opening. I will place there.".into(),
+        },
+    ];
+    let mut app = make_test_app(Screen::Playing(ps));
+    let buf = render_app_to_buffer(&mut app, WIDTH, HEIGHT);
+    insta::assert_snapshot!("playing_fullscreen_chat", buffer_to_string(&buf));
+}
+
 // ── Llamafile setup screen ───────────────────────────────────────────
 
 #[test]

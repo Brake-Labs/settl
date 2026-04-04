@@ -827,10 +827,18 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                         }
                         KeyCode::Char(' ') => ps.paused = !ps.paused,
                         KeyCode::Up | KeyCode::Char('k') => {
-                            ps.log_scroll = ps.log_scroll.saturating_sub(1);
+                            if ps.show_ai_panel {
+                                ps.chat_scroll = ps.chat_scroll.saturating_sub(1);
+                            } else {
+                                ps.log_scroll = ps.log_scroll.saturating_sub(1);
+                            }
                         }
                         KeyCode::Down | KeyCode::Char('j') => {
-                            ps.log_scroll = ps.log_scroll.saturating_add(1);
+                            if ps.show_ai_panel {
+                                ps.chat_scroll = ps.chat_scroll.saturating_add(1);
+                            } else {
+                                ps.log_scroll = ps.log_scroll.saturating_add(1);
+                            }
                         }
                         _ => {}
                     }
