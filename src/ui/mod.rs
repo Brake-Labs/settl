@@ -495,7 +495,21 @@ pub async fn run_app() -> io::Result<()> {
     let size = terminal.size()?;
     let show_size_warning = size.width < MIN_TERM_WIDTH || size.height < MIN_TERM_HEIGHT;
 
-    let config = crate::config::load_config();
+    let mut config = crate::config::load_config();
+
+    // Discover Anthropic models if API key is set.
+    if let Some(api_key) = crate::anthropic_api::detect_api_key() {
+        match crate::anthropic_api::list_models(&api_key).await {
+            Ok(models) => {
+                let entries = crate::anthropic_api::to_model_entries(&api_key, &models);
+                log::info!("Discovered {} Anthropic model(s)", entries.len());
+                config.merge_anthropic_models(entries);
+            }
+            Err(e) => {
+                log::warn!("Failed to fetch Anthropic models: {e}");
+            }
+        }
+    }
 
     let mut app = App {
         screen: Screen::MainMenu(MainMenuState::new()),
