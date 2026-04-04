@@ -56,7 +56,7 @@ Full resource names displayed on hex tiles (what the terrain produces, not terra
 | Pasture | Bright green | `Color::Rgb(80, 180, 60)` |
 | Fields | Golden yellow | `Color::Rgb(200, 170, 50)` |
 | Mountains | Cool gray | `Color::Rgb(140, 140, 150)` |
-| Desert | Warm sand | `Color::Rgb(205, 175, 115)` |
+| Desert | Warm amber | `Color::Rgb(194, 150, 80)` |
 
 **Fallback (256-color terminals):** Forest=Green, Hills=Red, Pasture=LightGreen, Fields=Yellow, Mountains=Gray, Desert=DarkGray.
 
