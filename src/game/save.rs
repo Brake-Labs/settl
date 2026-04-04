@@ -26,7 +26,12 @@ pub struct SaveFile {
     pub player_names: Vec<String>,
     pub player_configs: Vec<SavedPlayerConfig>,
     pub events: Vec<GameEvent>,
-    pub llamafile_model: LlamafileModel,
+    /// Name of the AI model used (matches a Config.models entry by name).
+    #[serde(default)]
+    pub model_name: String,
+    /// Legacy field for backward compatibility with old saves.
+    #[serde(default)]
+    pub llamafile_model: Option<LlamafileModel>,
     pub saved_at: String,
 }
 
@@ -99,7 +104,8 @@ mod tests {
                 },
             ],
             events: vec![],
-            llamafile_model: LlamafileModel::default(),
+            model_name: "Bonsai 1.7B (fast)".into(),
+            llamafile_model: Some(LlamafileModel::default()),
             game_state: state,
             saved_at: "2026-04-04T00:00:00Z".into(),
         };
@@ -134,7 +140,7 @@ mod tests {
             loaded.game_state.board.hexes.len()
         );
         assert_eq!(original.saved_at, loaded.saved_at);
-        assert_eq!(original.llamafile_model, loaded.llamafile_model);
+        assert_eq!(original.model_name, loaded.model_name);
     }
 
     #[test]

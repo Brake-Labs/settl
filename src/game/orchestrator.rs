@@ -55,8 +55,8 @@ pub struct GameOrchestrator {
     pub ui_tx: Option<mpsc::UnboundedSender<UiEvent>>,
     /// Player configs for auto-save (set by the launcher).
     pub player_configs: Vec<crate::game::save::SavedPlayerConfig>,
-    /// Which llamafile model is in use (for auto-save).
-    pub llamafile_model: crate::llamafile::LlamafileModel,
+    /// Name of the AI model in use (for auto-save, matches Config.models entry).
+    pub model_name: String,
 }
 
 impl GameOrchestrator {
@@ -70,7 +70,7 @@ impl GameOrchestrator {
             max_turns: 500,
             ui_tx: None,
             player_configs: Vec::new(),
-            llamafile_model: crate::llamafile::LlamafileModel::default(),
+            model_name: String::new(),
         }
     }
 
@@ -125,7 +125,8 @@ impl GameOrchestrator {
             player_names: self.player_names.clone(),
             player_configs: self.player_configs.clone(),
             events: self.events.clone(),
-            llamafile_model: self.llamafile_model,
+            model_name: self.model_name.clone(),
+            llamafile_model: None,
             saved_at: {
                 let d = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)

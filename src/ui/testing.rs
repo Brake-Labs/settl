@@ -127,6 +127,7 @@ pub fn make_test_app(screen: Screen) -> App {
         personalities: vec![],
         llamafile_process: None,
         show_size_warning: false,
+        config: crate::config::Config::default(),
     }
 }
 
@@ -137,7 +138,10 @@ pub fn main_menu_app() -> App {
 
 /// Create an `App` on the NewGame screen.
 pub fn new_game_app() -> App {
-    make_test_app(Screen::NewGame(NewGameState::new(&[])))
+    make_test_app(Screen::NewGame(NewGameState::new(
+        &[],
+        &crate::config::Config::default(),
+    )))
 }
 
 /// Create an `App` on the PostGame screen.
@@ -201,7 +205,7 @@ pub fn llamafile_setup_app() -> App {
             total: 1_073_741_824,
         },
         status_rx: rx,
-        saved_config: NewGameState::new(&[]),
+        saved_config: NewGameState::new(&[], &crate::config::Config::default()),
         task_handle: None,
         process_rx: None,
         resume_save: None,
@@ -211,7 +215,7 @@ pub fn llamafile_setup_app() -> App {
 
 /// Create a NewGame app with Llamafile players (for testing kind cycling).
 pub fn new_game_llamafile_app() -> App {
-    let mut ng = NewGameState::new(&[]);
+    let mut ng = NewGameState::new(&[], &crate::config::Config::default());
     // Ensure AI players are Llamafile type.
     for p in ng.players.iter_mut().skip(1) {
         p.kind = PlayerKind::Llamafile;
