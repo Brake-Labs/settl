@@ -108,6 +108,22 @@ fn draw_board_placeholder(f: &mut Frame, area: Rect, msg: &str) {
 
 /// Draw the playing screen with text-rendered board.
 pub fn draw_playing(f: &mut Frame, ps: &PlayingState) {
+    // Fullscreen llamafile log mode.
+    if ps.show_llamafile_log {
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Length(1)])
+            .split(f.area());
+
+        draw_llamafile_log(f, ps, chunks[0]);
+        draw_status_bar(f, ps, chunks[1]);
+
+        if ps.show_help {
+            draw_help_overlay(f, f.area());
+        }
+        return;
+    }
+
     // Fullscreen chat mode: chat takes everything except the status bar.
     if ps.show_ai_panel {
         let chunks = Layout::default()
@@ -427,6 +443,57 @@ fn draw_status_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
     ]);
     let status_paragraph = Paragraph::new(status);
     f.render_widget(status_paragraph, area);
+}
+
+// ── Llamafile Log ────────────────────────────────────────────────
+
+/// Draw a fullscreen llamafile server log viewer with auto-scroll.
+fn draw_llamafile_log(f: &mut Frame, ps: &PlayingState, area: Rect) {
+    let block = Block::default()
+        .title(Span::styled(
+            " Llamafile Server Log ",
+            Style::default().fg(Color::Yellow).bold(),
+        ))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::DarkGray));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+
+    let log_lines: Vec<String> = if let Some(ref log_buf) = ps.llamafile_log {
+        if let Ok(buf) = log_buf.lock() {
+            buf.clone()
+        } else {
+            vec!["(failed to read log buffer)".into()]
+        }
+    } else {
+        vec!["(no llamafile process)".into()]
+    };
+    let lines: Vec<Line> = log_lines
+        .iter()
+        .map(|line| {
+            Line::from(Span::styled(
+                line.as_str(),
+                Style::default().fg(Color::White),
+            ))
+        })
+        .collect();
+
+    let visible = inner.height as usize;
+    let total = lines.len();
+    let max_scroll = total.saturating_sub(visible) as u16;
+    // Auto-scroll to bottom unless user has scrolled up.
+    let effective_scroll = ps.llamafile_log_scroll.min(max_scroll);
+    let auto_scroll = effective_scroll == max_scroll || ps.llamafile_log_scroll > max_scroll;
+    let scroll = if auto_scroll {
+        max_scroll
+    } else {
+        effective_scroll
+    };
+
+    let para = Paragraph::new(lines)
+        .scroll((scroll, 0))
+        .wrap(Wrap { trim: false });
+    f.render_widget(para, inner);
 }
 
 // ── Help Overlay ──────────────────────────────────────────────────

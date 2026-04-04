@@ -196,6 +196,12 @@ pub struct PlayingState {
     pub show_ai_panel: bool,
     /// Whether to show the help overlay (? toggle).
     pub show_help: bool,
+    /// Whether to show the llamafile server log (L toggle).
+    pub show_llamafile_log: bool,
+    /// Scroll offset for the llamafile log viewer.
+    pub llamafile_log_scroll: u16,
+    /// Shared buffer of llamafile stderr lines (None if not using llamafile).
+    pub llamafile_log: Option<crate::llamafile::process::LogBuffer>,
     /// Current input mode (replaces pending_prompt).
     pub input_mode: InputMode,
     /// Channel to receive human prompts from the engine.
@@ -235,6 +241,9 @@ impl PlayingState {
             paused: false,
             show_ai_panel: false,
             show_help: false,
+            show_llamafile_log: false,
+            llamafile_log_scroll: 0,
+            llamafile_log: None,
             input_mode: InputMode::Spectating,
             human_prompt_rx: None,
             human_response_tx: None,
@@ -576,15 +585,22 @@ async fn run_event_loop(
                                     );
                                     if is_api {
                                         // API models don't need llamafile -- launch directly.
-                                        let screen =
-                                            launch_game(ng, &app.personalities, &app.config, None);
+                                        let screen = launch_game(
+                                            ng,
+                                            &app.personalities,
+                                            &app.config,
+                                            None,
+                                            None,
+                                        );
                                         app.screen = screen;
                                     } else if let Some(ref process) = app.llamafile_process {
+                                        let log_buf = Some(process.log_buffer.clone());
                                         let screen = launch_game(
                                             ng,
                                             &app.personalities,
                                             &app.config,
                                             Some(process.port),
+                                            log_buf,
                                         );
                                         app.screen = screen;
                                     } else {
@@ -619,14 +635,17 @@ async fn run_event_loop(
                                             &app.personalities,
                                             &app.config,
                                             None,
+                                            None,
                                         );
                                         app.screen = screen;
                                     } else if let Some(ref process) = app.llamafile_process {
+                                        let log_buf = Some(process.log_buffer.clone());
                                         let screen = resume_game(
                                             save,
                                             &app.personalities,
                                             &app.config,
                                             Some(process.port),
+                                            log_buf,
                                         );
                                         app.screen = screen;
                                     } else {
@@ -676,14 +695,16 @@ async fn run_event_loop(
                 if let Screen::LlamafileSetup(setup) =
                     std::mem::replace(&mut app.screen, Screen::MainMenu(MainMenuState::new()))
                 {
+                    let log_buf = app.llamafile_process.as_ref().map(|p| p.log_buffer.clone());
                     let screen = if let Some(save) = setup.resume_save {
-                        resume_game(save, &app.personalities, &app.config, Some(port))
+                        resume_game(save, &app.personalities, &app.config, Some(port), log_buf)
                     } else {
                         launch_game(
                             &setup.saved_config,
                             &app.personalities,
                             &app.config,
                             Some(port),
+                            log_buf,
                         )
                     };
                     app.screen = screen;
@@ -905,6 +926,11 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                     ps.show_ai_panel = !ps.show_ai_panel;
                     return Action::None;
                 }
+                // L toggles llamafile server log (only when llamafile is active).
+                KeyCode::Char('L') if ps.llamafile_log.is_some() => {
+                    ps.show_llamafile_log = !ps.show_llamafile_log;
+                    return Action::None;
+                }
                 _ => {}
             }
 
@@ -926,14 +952,18 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                         }
                         KeyCode::Char(' ') => ps.paused = !ps.paused,
                         KeyCode::Up | KeyCode::Char('k') => {
-                            if ps.show_ai_panel {
+                            if ps.show_llamafile_log {
+                                ps.llamafile_log_scroll = ps.llamafile_log_scroll.saturating_sub(1);
+                            } else if ps.show_ai_panel {
                                 ps.chat_scroll = ps.chat_scroll.saturating_sub(1);
                             } else {
                                 ps.log_scroll = ps.log_scroll.saturating_sub(1);
                             }
                         }
                         KeyCode::Down | KeyCode::Char('j') => {
-                            if ps.show_ai_panel {
+                            if ps.show_llamafile_log {
+                                ps.llamafile_log_scroll = ps.llamafile_log_scroll.saturating_add(1);
+                            } else if ps.show_ai_panel {
                                 ps.chat_scroll = ps.chat_scroll.saturating_add(1);
                             } else {
                                 ps.log_scroll = ps.log_scroll.saturating_add(1);
@@ -1358,6 +1388,7 @@ fn launch_game(
     discovered_personalities: &[Personality],
     config: &crate::config::Config,
     llamafile_port: Option<u16>,
+    llamafile_log: Option<crate::llamafile::process::LogBuffer>,
 ) -> Screen {
     use player::tui_human::{HumanInputChannel, TuiHumanPlayer};
     use std::sync::Arc;
@@ -1488,6 +1519,7 @@ fn launch_game(
     });
 
     let mut ps = PlayingState::new(rx, player_names, has_human);
+    ps.llamafile_log = llamafile_log;
     if let Some((_, prompt_rx, response_tx)) = human_channels {
         ps.human_prompt_rx = Some(prompt_rx);
         ps.human_response_tx = Some(response_tx);
@@ -1501,6 +1533,7 @@ fn resume_game(
     discovered_personalities: &[Personality],
     config: &crate::config::Config,
     llamafile_port: Option<u16>,
+    llamafile_log: Option<crate::llamafile::process::LogBuffer>,
 ) -> Screen {
     use player::tui_human::{HumanInputChannel, TuiHumanPlayer};
     use std::sync::Arc;
@@ -1604,6 +1637,7 @@ fn resume_game(
     });
 
     let mut ps = PlayingState::new(rx, player_names, has_human);
+    ps.llamafile_log = llamafile_log;
     if let Some((_, prompt_rx, response_tx)) = human_channels {
         ps.human_prompt_rx = Some(prompt_rx);
         ps.human_response_tx = Some(response_tx);
