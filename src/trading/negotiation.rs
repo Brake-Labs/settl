@@ -249,4 +249,51 @@ mod tests {
             TradeResponse::Reject { .. }
         ));
     }
+
+    /// Regression test for GitHub issue #106:
+    /// Trading 1 Ore for 1 Wood must not affect any other resources.
+    #[test]
+    fn trade_ore_for_wood_does_not_give_extra_brick() {
+        let board = Board::default_board();
+        let mut state = GameState::new(board, 3);
+
+        // Player 0 has 2 Ore and 1 Brick (Brick must not change).
+        state.players[0].add_resource(Resource::Ore, 2);
+        state.players[0].add_resource(Resource::Brick, 1);
+
+        // Player 1 has 2 Wood.
+        state.players[1].add_resource(Resource::Wood, 2);
+
+        // Player 0 offers 1 Ore, wants 1 Wood.
+        let offer = make_offer(0, Resource::Ore, 1, Resource::Wood, 1);
+        execute_in_state(&mut state, &offer, 1).unwrap();
+
+        // Player 0: lost 1 Ore, gained 1 Wood, Brick unchanged.
+        assert_eq!(state.players[0].resource_count(Resource::Ore), 1);
+        assert_eq!(state.players[0].resource_count(Resource::Wood), 1);
+        assert_eq!(
+            state.players[0].resource_count(Resource::Brick),
+            1,
+            "Brick must not change when trading Ore for Wood"
+        );
+        assert_eq!(
+            state.players[0].resource_count(Resource::Sheep),
+            0,
+            "Sheep must remain 0"
+        );
+        assert_eq!(
+            state.players[0].resource_count(Resource::Wheat),
+            0,
+            "Wheat must remain 0"
+        );
+
+        // Player 1: gained 1 Ore, lost 1 Wood.
+        assert_eq!(state.players[1].resource_count(Resource::Ore), 1);
+        assert_eq!(state.players[1].resource_count(Resource::Wood), 1);
+        assert_eq!(
+            state.players[1].resource_count(Resource::Brick),
+            0,
+            "Acceptor Brick must remain 0"
+        );
+    }
 }
