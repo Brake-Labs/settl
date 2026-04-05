@@ -369,9 +369,12 @@ impl GameOrchestrator {
         // Step 3: Action loop -- player takes actions until EndTurn.
         let max_actions_per_turn = 15;
         let max_trades_per_turn = 3;
+        let max_attempts = max_actions_per_turn * 3; // hard ceiling including failed attempts
         let mut action_count = 0;
         let mut trade_count = 0;
-        while action_count < max_actions_per_turn {
+        let mut attempt_count = 0;
+        while action_count < max_actions_per_turn && attempt_count < max_attempts {
+            attempt_count += 1;
             let choices = self.build_choices_with_trade_limit(trade_count < max_trades_per_turn);
 
             if choices.is_empty() {
