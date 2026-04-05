@@ -7,7 +7,6 @@
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0"></a>
     <a href="https://settl.dev"><img src="https://img.shields.io/badge/docs-settl.dev-green" alt="Docs"></a>
     <br>
-    <a href="https://x.com/natebrake"><img src="https://img.shields.io/badge/follow-%40natebrake-black?logo=x&logoColor=white" alt="Follow @natebrake"></a>
   </p>
 </p>
 
