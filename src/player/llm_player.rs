@@ -154,12 +154,6 @@ impl LlmPlayer {
         self.force_tool_reasoning = force;
     }
 
-    /// Reduce conversation history limit for small-context models.
-    pub fn set_small_context(&mut self) {
-        let conv = self.conversation.get_mut();
-        conv.max_history_pairs = MAX_HISTORY_PAIRS_SMALL;
-    }
-
     // -- Tool definitions --
     //
     // When `force_reasoning` is true an `analysis` field is prepended so the
@@ -269,6 +263,7 @@ impl LlmPlayer {
                     "description": "Why this trade helps your strategy (1-2 sentences)"
                 }),
             );
+            required.push(serde_json::Value::String("analysis".into()));
         }
         props.insert(
             "give_resource".into(),
