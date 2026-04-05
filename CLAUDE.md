@@ -135,6 +135,7 @@ When changing game rules, controls, CLI options, or player-facing behavior:
 - [ ] Verify the TUI docs viewer still compiles (`cargo build`)
 - [ ] Run `node scripts/generate-docs.mjs` to regenerate website pages
 - [ ] Never reference "Settlers of Catan" or "Catan" anywhere in docs, README, or code comments
+- [ ] No usages of the 'em-dash' (--) anywhere in the code or comments
 
 ## Game Rules
 
