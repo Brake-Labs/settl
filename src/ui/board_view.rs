@@ -212,6 +212,16 @@ impl SubPixelCanvas {
         }
     }
 
+    fn clear_pixel(&mut self, x: i16, y: i16) {
+        if x < 0 || y < 0 {
+            return;
+        }
+        let (x, y) = (x as usize, y as usize);
+        if x < self.width && y < self.height {
+            self.pixels[y * self.width + x] = None;
+        }
+    }
+
     fn fill_row(&mut self, y: i16, x_start: i16, x_end: i16, color: Color) {
         for x in x_start..=x_end {
             self.set_pixel(x, y, color);
@@ -393,6 +403,26 @@ fn draw_building_subpixel(
     }
 }
 
+/// Clear a 1-sub-pixel ring around a building to visually separate it from roads.
+fn clear_building_gap(building: &Building, sx: i16, sy: i16, canvas: &mut SubPixelCanvas) {
+    let ssy = sy * 2;
+    let (by_min, by_max) = match building {
+        Building::Settlement(_) => (ssy - 2, ssy + 1),
+        Building::City(_) => (ssy - 2, ssy + 3),
+    };
+    let bx_min = sx - 2;
+    let bx_max = sx + 2;
+
+    for ry in (by_min - 1)..=(by_max + 1) {
+        for rx in (bx_min - 1)..=(bx_max + 1) {
+            if rx >= bx_min && rx <= bx_max && ry >= by_min && ry <= by_max {
+                continue;
+            }
+            canvas.clear_pixel(rx, ry);
+        }
+    }
+}
+
 // ── Rendering ───────────────────────────────────────────────────────
 
 /// Render the hex board with terrain, buildings, roads, robber, and cursor.
@@ -459,6 +489,13 @@ pub fn render_board(
                 .copied()
                 .unwrap_or(Color::White);
             draw_building_subpixel(building, vx, vy, color, &mut canvas);
+        }
+    }
+
+    // Layer 2c: Clear a thin ring around each building so roads don't touch.
+    for (vertex, building) in &state.buildings {
+        if let Some(&(vx, vy)) = grid.vertex_pos.get(vertex) {
+            clear_building_gap(building, vx, vy, &mut canvas);
         }
     }
 
@@ -839,6 +876,49 @@ mod tests {
         assert_eq!(
             buf.cell(ratatui::layout::Position::new(6, 5)).unwrap().bg,
             Color::Reset
+        );
+    }
+
+    #[test]
+    fn building_gap_clears_adjacent_road_pixels() {
+        // Place a settlement at (10, 10) and a NE road whose endpoint reaches it.
+        // After clearing the gap, road pixels adjacent to the building must be None.
+        let mut canvas = SubPixelCanvas::new(30, 30);
+
+        // Draw a NE road centered at edge midpoint (5, 8).
+        // The road's last offsets (3,2) and (4,3) will be near the settlement.
+        draw_road_subpixel(EdgeDirection::NorthEast, 5, 8, Color::LightRed, &mut canvas);
+
+        // Draw settlement background at (10, 10).
+        let building = Building::Settlement(0);
+        draw_building_subpixel(&building, 10, 10, Color::LightRed, &mut canvas);
+
+        // Verify road pixel at the gap boundary exists BEFORE clearing.
+        // Offset (1,1) from midpoint (5, smy=16): pixel at (6, 17) and (7, 17).
+        assert!(canvas.get(6, 17).is_some(), "road pixel before gap clear");
+
+        // Clear the building gap.
+        clear_building_gap(&building, 10, 10, &mut canvas);
+
+        // Settlement background at (10,10): ssy=20, rows 18..=21, cols 8..=12.
+        // Gap ring: rows 17..=22, cols 7..=13, minus the building interior.
+        // Road pixel at (7, 17) should now be cleared (it's in the ring).
+        assert!(
+            canvas.get(7, 17).is_none(),
+            "road pixel in gap ring should be cleared"
+        );
+
+        // Building interior should still be filled.
+        assert!(
+            canvas.get(10, 20).is_some(),
+            "building interior should survive gap clearing"
+        );
+
+        // Road pixel further from the building should survive.
+        // Offset (0,0) at (5, 16) and (6, 16).
+        assert!(
+            canvas.get(5, 16).is_some(),
+            "road pixel away from building should survive"
         );
     }
 }
