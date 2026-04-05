@@ -44,4 +44,4 @@ Docs are also accessible from the TUI via the **Docs** menu item.
 
 ## License
 
-MIT
+Apache 2.0
