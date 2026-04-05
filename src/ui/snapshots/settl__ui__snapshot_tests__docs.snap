@@ -1,0 +1,69 @@
+---
+source: src/ui/snapshot_tests.rs
+expression: buffer_to_string(&buf)
+---
+┌ Docs ────────────────┐┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ > Getting Started    ││ Getting Started                                                                                                                                │
+│   How to Play        ││                                                                                                                                                │
+│   Controls           ││                                                                                                                                                │
+│   AI Players         ││ settl is a terminal hex settlement game where AI players compete using tool-calling LLMs. You can play against them, spectate, or run headless │
+│   Development        ││ simulations.                                                                                                                                   │
+│                      ││                                                                                                                                                │
+│                      ││                                                                                                                                                │
+│                      ││ Installation                                                                                                                                   │
+│                      ││ ------------                                                                                                                                   │
+│                      ││                                                                                                                                                │
+│                      ││ Clone the repo and build with Cargo:                                                                                                           │
+│                      ││                                                                                                                                                │
+│                      ││   git clone https://github.com/Brake-Labs/settl.git                                                                                            │
+│                      ││   cd settl                                                                                                                                     │
+│                      ││   cargo build --release                                                                                                                        │
+│                      ││                                                                                                                                                │
+│                      ││ The binary is at target/release/settl.                                                                                                         │
+│                      ││                                                                                                                                                │
+│                      ││                                                                                                                                                │
+│                      ││ Your First Game                                                                                                                                │
+│                      ││ ---------------                                                                                                                                │
+│                      ││                                                                                                                                                │
+│                      ││ Launch the TUI:                                                                                                                                │
+│                      ││                                                                                                                                                │
+│                      ││   cargo run                                                                                                                                    │
+│                      ││                                                                                                                                                │
+│                      ││ This opens the title screen. Select New Game to configure players and start.                                                                   │
+│                      ││                                                                                                                                                │
+│                      ││ Player 1 is always human. You choose how many AI opponents (up to 3) and their personalities. The default AI backend is llamafile, which runs  │
+│                      ││ a local LLM with no API keys needed.                                                                                                           │
+│                      ││                                                                                                                                                │
+│                      ││                                                                                                                                                │
+│                      ││ Headless Mode                                                                                                                                  │
+│                      ││ -------------                                                                                                                                  │
+│                      ││                                                                                                                                                │
+│                      ││ Run games without the TUI for scripting and CI:                                                                                                │
+│                      ││                                                                                                                                                │
+│                      ││   # Random AI players, no API keys needed                                                                                                      │
+│                      ││   cargo run -- --demo                                                                                                                          │
+│                      ││                                                                                                                                                │
+│                      ││   # LLM players via API                                                                                                                        │
+│                      ││   ANTHROPIC_API_KEY=sk-... cargo run -- --headless --model claude-sonnet-4-6                                                                   │
+│                      ││                                                                                                                                                │
+│                      ││   # Per-player model assignment                                                                                                                │
+│                      ││   cargo run -- --models "claude-sonnet-4-6,gpt-4o-mini,claude-haiku-4-5-20251001"                                                              │
+│                      ││                                                                                                                                                │
+│                      ││   # Reproducible board                                                                                                                         │
+│                      ││   cargo run -- --demo --seed 42                                                                                                                │
+│                      ││                                                                                                                                                │
+│                      ││                                                                                                                                                │
+│                      ││ CLI Options                                                                                                                                    │
+│                      ││ -----------                                                                                                                                    │
+│                      ││                                                                                                                                                │
+│                      ││   | Flag | Description | Default |                                                                                                             │
+│                      ││   | `--headless` | Run in text mode (no TUI) | off |                                                                                           │
+│                      ││   | `--demo` | Random AI players, no API keys | off |                                                                                          │
+│                      ││   | `-p, --players N` | Number of players (2-4) | 4 |                                                                                          │
+│                      ││   | `-m, --model MODEL` | Default LLM model | claude-sonnet-4-6 |                                                                              │
+│                      ││   | `--models M1,M2,...` | Per-player model assignment | -- |                                                                                  │
+│                      ││   | `--personality FILE` | TOML personality file | built-in |                                                                                  │
+│                      ││   | `--seed N` | RNG seed for reproducible boards | random |                                                                                   │
+│                      ││                                                                                                                                                │
+└──────────────────────┘└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
+                                                                    [↑↓] page  [j/k] scroll  [Esc] back

@@ -1,0 +1,79 @@
+---
+interface Props {
+  title: string;
+  description: string;
+}
+
+const siteUrl = Astro.site?.toString().replace(/\/$/, '') ?? '';
+
+const {
+  title,
+  description,
+} = Astro.props;
+
+const canonicalURL = new URL(Astro.url.pathname, Astro.site);
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "settl",
+  "description": "A terminal hex settlement game where LLMs play via tool calling. Built with Rust, powered by ratatui.",
+  "url": siteUrl,
+  "applicationCategory": "GameApplication",
+  "operatingSystem": "Linux, macOS, Windows",
+  "programmingLanguage": "Rust",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "author": {
+    "@type": "Organization",
+    "name": "mozilla.ai",
+    "url": "https://mozilla.ai"
+  },
+  "license": "https://github.com/Brake-Labs/settl/blob/main/LICENSE",
+  "codeRepository": "https://github.com/Brake-Labs/settl",
+  "keywords": ["terminal game", "hex game", "LLM", "AI", "llamafile", "TUI", "Rust", "ratatui"]
+};
+---
+
+<!DOCTYPE html>
+<html lang="en" style="color-scheme: dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{title}</title>
+  <meta name="description" content={description}>
+  <meta name="author" content="mozilla.ai">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href={canonicalURL}>
+
+  <!-- Open Graph -->
+  <meta property="og:title" content={title}>
+  <meta property="og:description" content={description}>
+  <meta property="og:url" content={canonicalURL}>
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="settl">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content={title}>
+  <meta name="twitter:description" content={description}>
+
+  <!-- Structured Data -->
+  <script type="application/ld+json" set:html={JSON.stringify(structuredData)} />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" as="style">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body class="gradient-bg min-h-screen text-gray-100 antialiased">
+  <slot />
+  <script is:inline src="/main.js"></script>
+</body>
+</html>

@@ -54,6 +54,13 @@ fn snapshot_size_warning() {
     insta::assert_snapshot!("size_warning", buffer_to_string(&buf));
 }
 
+#[test]
+fn snapshot_docs() {
+    let mut app = make_test_app(Screen::Docs(DocsState::new()));
+    let buf = render_app_to_buffer(&mut app, WIDTH, HEIGHT);
+    insta::assert_snapshot!("docs", buffer_to_string(&buf));
+}
+
 // ── Playing screen: various input modes ──────────────────────────────
 
 #[test]

@@ -31,6 +31,57 @@ fn size_warning_blocks_underlying_input() {
     assert!(!app.show_size_warning);
 }
 
+// ── Docs ────────────────────────────────────────────────────────────
+
+#[test]
+fn docs_esc_returns_to_main_menu() {
+    let mut app = make_test_app(Screen::Docs(DocsState::new()));
+    let action = handle_input(&mut app, KeyCode::Esc);
+    assert!(matches!(action, Action::Transition(Screen::MainMenu(_))));
+}
+
+#[test]
+fn docs_q_returns_to_main_menu() {
+    let mut app = make_test_app(Screen::Docs(DocsState::new()));
+    let action = handle_input(&mut app, KeyCode::Char('q'));
+    assert!(matches!(action, Action::Transition(Screen::MainMenu(_))));
+}
+
+#[test]
+fn docs_down_advances_page() {
+    let mut app = make_test_app(Screen::Docs(DocsState::new()));
+    handle_input(&mut app, KeyCode::Down);
+    if let Screen::Docs(ref state) = app.screen {
+        assert_eq!(state.page_index, 1);
+        assert_eq!(state.scroll, 0, "scroll resets on page change");
+    } else {
+        panic!("should still be on Docs");
+    }
+}
+
+#[test]
+fn docs_up_at_zero_stays() {
+    let mut app = make_test_app(Screen::Docs(DocsState::new()));
+    handle_input(&mut app, KeyCode::Up);
+    if let Screen::Docs(ref state) = app.screen {
+        assert_eq!(state.page_index, 0);
+    }
+}
+
+#[test]
+fn docs_jk_scrolls_content() {
+    let mut app = make_test_app(Screen::Docs(DocsState::new()));
+    handle_input(&mut app, KeyCode::Char('j'));
+    handle_input(&mut app, KeyCode::Char('j'));
+    if let Screen::Docs(ref state) = app.screen {
+        assert_eq!(state.scroll, 2);
+    }
+    handle_input(&mut app, KeyCode::Char('k'));
+    if let Screen::Docs(ref state) = app.screen {
+        assert_eq!(state.scroll, 1);
+    }
+}
+
 // ── Main Menu ────────────────────────────────────────────────────────
 
 #[test]
