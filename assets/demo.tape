@@ -61,7 +61,7 @@ Sleep 700ms
 Enter
 
 # Wait for llamafile setup to complete (model already cached)
-Sleep 6s
+Sleep 2s
 
 # Board is now visible with settlement placement cursor.
 # Browse a few legal positions then place.
