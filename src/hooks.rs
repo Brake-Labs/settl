@@ -33,6 +33,7 @@ fn event_name(event: &GameEvent) -> &'static str {
         GameEvent::TradeRejected { .. } => "TradeRejected",
         GameEvent::TradeCountered { .. } => "TradeCountered",
         GameEvent::TradeWithdrawn { .. } => "TradeWithdrawn",
+        GameEvent::PlayerTradeExecuted { .. } => "PlayerTradeExecuted",
         GameEvent::BankTradeExecuted { .. } => "BankTradeExecuted",
         GameEvent::DevCardBought { .. } => "DevCardBought",
         GameEvent::DevCardPlayed { .. } => "DevCardPlayed",
@@ -170,6 +171,12 @@ mod tests {
                 reasoning: String::new(),
             },
             GameEvent::TradeWithdrawn { by: 0 },
+            GameEvent::PlayerTradeExecuted {
+                proposer: 0,
+                acceptor: 1,
+                gave: vec![(crate::game::board::Resource::Wood, 1)],
+                got: vec![(crate::game::board::Resource::Brick, 1)],
+            },
             GameEvent::BankTradeExecuted {
                 player: 0,
                 gave: (crate::game::board::Resource::Wood, 4),
@@ -197,13 +204,13 @@ mod tests {
         ];
 
         let names: Vec<&str> = events.iter().map(event_name).collect();
-        assert_eq!(names.len(), 18);
+        assert_eq!(names.len(), 19);
         // All names should be non-empty and unique.
         for name in &names {
             assert!(!name.is_empty());
         }
         let unique: std::collections::HashSet<&&str> = names.iter().collect();
-        assert_eq!(unique.len(), 18, "all event names should be unique");
+        assert_eq!(unique.len(), 19, "all event names should be unique");
     }
 
     #[test]

@@ -69,6 +69,12 @@ pub enum GameEvent {
     TradeWithdrawn {
         by: PlayerId,
     },
+    PlayerTradeExecuted {
+        proposer: PlayerId,
+        acceptor: PlayerId,
+        gave: Vec<(Resource, u32)>,
+        got: Vec<(Resource, u32)>,
+    },
     BankTradeExecuted {
         player: PlayerId,
         gave: (Resource, u32),
@@ -236,6 +242,30 @@ pub fn format_event(event: &GameEvent, player_names: &[String]) -> String {
         }
         GameEvent::TradeWithdrawn { by } => {
             format!("{} withdrew trade", name(*by))
+        }
+        GameEvent::PlayerTradeExecuted {
+            proposer,
+            acceptor,
+            gave,
+            got,
+        } => {
+            let gave_str: String = gave
+                .iter()
+                .map(|(r, n)| format!("{} {}", n, r))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let got_str: String = got
+                .iter()
+                .map(|(r, n)| format!("{} {}", n, r))
+                .collect::<Vec<_>>()
+                .join(", ");
+            format!(
+                "Trade complete: {} gave [{}] to {} for [{}]",
+                name(*proposer),
+                gave_str,
+                name(*acceptor),
+                got_str
+            )
         }
         GameEvent::BankTradeExecuted { player, gave, got } => {
             format!(

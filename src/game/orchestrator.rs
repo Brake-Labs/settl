@@ -1095,7 +1095,14 @@ impl GameOrchestrator {
                                 &counter_offer,
                                 player_id,
                             ) {
-                                Ok(()) => {}
+                                Ok(()) => {
+                                    self.record_event(GameEvent::PlayerTradeExecuted {
+                                        proposer: other_id,
+                                        acceptor: player_id,
+                                        gave: counter_offer.offering.clone(),
+                                        got: counter_offer.requesting.clone(),
+                                    });
+                                }
                                 Err(_) => {
                                     self.record_event(GameEvent::TradeWithdrawn { by: other_id });
                                 }
@@ -1116,7 +1123,14 @@ impl GameOrchestrator {
         // Step 3: Execute the trade using the trading module.
         if let Some(acceptor) = accepted_by {
             match trading::negotiation::execute_in_state(&mut self.state, &offer, acceptor) {
-                Ok(()) => {}
+                Ok(()) => {
+                    self.record_event(GameEvent::PlayerTradeExecuted {
+                        proposer: player_id,
+                        acceptor,
+                        gave: offer.offering.clone(),
+                        got: offer.requesting.clone(),
+                    });
+                }
                 Err(_) => {
                     self.record_event(GameEvent::TradeWithdrawn { by: player_id });
                 }
