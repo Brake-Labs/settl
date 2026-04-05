@@ -33,3 +33,10 @@ Thumbs.db
 *.dylib
 debug.log
 *.png
+
+# Website build artifacts
+website/node_modules/
+website/dist/
+website/.astro/
+# Generated docs pages (derived from docs/ by build script)
+website/src/pages/docs/*.md

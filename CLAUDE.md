@@ -117,6 +117,25 @@ All color choices, character vocabulary, layout constraints, keyboard shortcuts,
 Do not deviate without explicit user approval.
 In QA mode, flag any code that doesn't match DESIGN.md.
 
+## Documentation
+
+Documentation lives in `docs/` as markdown files with YAML frontmatter. These serve two consumers:
+
+1. **Astro website** (`website/`) -- `scripts/generate-docs.mjs` reads from `docs/` and generates Astro pages at build time. Run `node scripts/generate-docs.mjs` to regenerate.
+2. **TUI binary** -- docs are embedded via `include_str!()` in `src/ui/screens.rs` (`docs_pages()` function). Accessible from the main menu via "Docs".
+
+When adding or renaming doc files, update both:
+- The `docs_pages()` function in `src/ui/screens.rs` (add/remove `include_str!` entries)
+- The `docsNav` array in `website/src/data/docsNav.ts` (sidebar navigation)
+
+### Definition of Done for docs changes
+
+When changing game rules, controls, CLI options, or player-facing behavior:
+- [ ] Update the relevant `docs/*.md` file to reflect the change
+- [ ] Verify the TUI docs viewer still compiles (`cargo build`)
+- [ ] Run `node scripts/generate-docs.mjs` to regenerate website pages
+- [ ] Never reference "Settlers of Catan" or "Catan" anywhere in docs, README, or code comments
+
 ## Game Rules
 
 **Quick cost reference**: Road: 1 Wood + 1 Brick | Settlement: 1 Wood + 1 Brick + 1 Sheep + 1 Wheat | City: 2 Wheat + 3 Ore | Dev Card: 1 Wheat + 1 Sheep + 1 Ore

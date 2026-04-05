@@ -25,7 +25,6 @@ expression: buffer_to_string(&buf)
 
 
 
-
                                                                 ███████╗███████╗████████╗████████╗██╗
                                                                 ██╔════╝██╔════╝╚══██╔══╝╚══██╔══╝██║
                                                                 ███████╗█████╗     ██║      ██║   ██║
@@ -38,6 +37,7 @@ expression: buffer_to_string(&buf)
 
                                                                                > New Game
                                                                                  Settings
+                                                                                 Docs
                                                                                  About
                                                                                  Quit
 

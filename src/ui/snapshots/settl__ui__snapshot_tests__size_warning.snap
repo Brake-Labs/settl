@@ -18,6 +18,7 @@ expression: buffer_to_string(&buf)
               │                                                  │
               │  Press any key to continue...                    │
               └──────────────────────────────────────────────────┘
+                                    About
                                     Quit
 
                      [↑↓] navigate  [Enter] select  [q] quit

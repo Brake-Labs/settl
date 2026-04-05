@@ -39,9 +39,9 @@ impl MainMenuState {
 
     pub fn menu_items(&self) -> Vec<&'static str> {
         if self.has_save {
-            vec!["Continue", "New Game", "Settings", "About", "Quit"]
+            vec!["Continue", "New Game", "Settings", "Docs", "About", "Quit"]
         } else {
-            vec!["New Game", "Settings", "About", "Quit"]
+            vec!["New Game", "Settings", "Docs", "About", "Quit"]
         }
     }
 }
@@ -198,6 +198,67 @@ pub struct PostGameState {
 
 #[derive(Debug)]
 pub struct AboutState;
+
+// ── Docs ──────────────────────────────────────────────────────────────
+
+/// A single documentation page embedded at compile time.
+pub struct DocsPage {
+    pub title: &'static str,
+    pub body: &'static str,
+}
+
+/// Parse a docs markdown file: strip YAML frontmatter, extract title, return body lines.
+fn parse_doc(raw: &'static str) -> DocsPage {
+    let stripped = raw.strip_prefix("---\n").unwrap_or(raw);
+    let (frontmatter, body) = stripped.split_once("\n---\n").unwrap_or(("", stripped));
+
+    let title = frontmatter
+        .lines()
+        .find_map(|l| l.strip_prefix("title:"))
+        .map(|t| t.trim())
+        .unwrap_or("Docs");
+
+    // Skip the leading `# Title` line if present (we render our own header).
+    let body = body.trim_start_matches('\n');
+    let body = if let Some(rest) = body.strip_prefix("# ") {
+        rest.split_once('\n').map(|(_, b)| b).unwrap_or("")
+    } else {
+        body
+    };
+
+    DocsPage { title, body }
+}
+
+/// All embedded documentation pages, ordered for sidebar display.
+pub fn docs_pages() -> Vec<DocsPage> {
+    vec![
+        parse_doc(include_str!("../../docs/getting-started.md")),
+        parse_doc(include_str!("../../docs/how-to-play.md")),
+        parse_doc(include_str!("../../docs/controls.md")),
+        parse_doc(include_str!("../../docs/ai-players.md")),
+        parse_doc(include_str!("../../docs/development.md")),
+    ]
+}
+
+#[derive(Debug, Default)]
+pub struct DocsState {
+    /// Which page is selected in the sidebar.
+    pub page_index: usize,
+    /// Scroll offset within the content panel.
+    pub scroll: u16,
+    /// Cached page count (avoids re-parsing on every frame).
+    pub page_count: usize,
+}
+
+impl DocsState {
+    pub fn new() -> Self {
+        Self {
+            page_index: 0,
+            scroll: 0,
+            page_count: 5,
+        }
+    }
+}
 
 // ── Llamafile Setup ───────────────────────────────────────────────────
 
@@ -550,6 +611,182 @@ pub fn draw_about(f: &mut Frame) {
     let hint_y = area.y + area.height - 1;
     let hint_area = Rect::new(area.x, hint_y, area.width, 1);
     let hint = Paragraph::new("[Esc] back")
+        .alignment(Alignment::Center)
+        .style(Style::default().fg(Color::DarkGray));
+    f.render_widget(hint, hint_area);
+}
+
+/// Render markdown body text into styled ratatui Lines.
+///
+/// Handles: `## headings`, `### subheadings`, `| tables |`, `` ```code blocks``` ``,
+/// `- list items`, `**bold**`, `` `inline code` ``, and plain paragraphs.
+fn render_markdown_lines(body: &str) -> Vec<Line<'static>> {
+    let mut lines: Vec<Line<'static>> = Vec::new();
+    let mut in_code_block = false;
+
+    for raw_line in body.lines() {
+        if raw_line.starts_with("```") {
+            in_code_block = !in_code_block;
+            continue;
+        }
+
+        if in_code_block {
+            lines.push(Line::styled(
+                format!("  {}", raw_line),
+                Style::default().fg(Color::Cyan),
+            ));
+            continue;
+        }
+
+        let trimmed = raw_line.trim();
+
+        if trimmed.is_empty() {
+            lines.push(Line::from(""));
+        } else if let Some(heading) = trimmed.strip_prefix("### ") {
+            lines.push(Line::from(""));
+            lines.push(Line::styled(
+                heading.to_string(),
+                Style::default().fg(Color::White).bold(),
+            ));
+        } else if let Some(heading) = trimmed.strip_prefix("## ") {
+            lines.push(Line::from(""));
+            lines.push(Line::styled(
+                heading.to_string(),
+                Style::default().fg(Color::Yellow).bold(),
+            ));
+            // Underline.
+            let underline = "-".repeat(heading.len());
+            lines.push(Line::styled(
+                underline,
+                Style::default().fg(Color::DarkGray),
+            ));
+        } else if trimmed.starts_with('|') {
+            // Table row: render in dim white.
+            if trimmed
+                .chars()
+                .all(|c| c == '|' || c == '-' || c == ' ' || c == ':')
+            {
+                // Separator row: skip.
+            } else {
+                lines.push(Line::styled(
+                    format!("  {}", trimmed),
+                    Style::default().fg(Color::White),
+                ));
+            }
+        } else if let Some(item) = trimmed.strip_prefix("- ") {
+            lines.push(Line::from(vec![
+                Span::styled("  - ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    render_inline_markup(item),
+                    Style::default().fg(Color::White),
+                ),
+            ]));
+        } else {
+            lines.push(Line::styled(
+                render_inline_markup(trimmed),
+                Style::default().fg(Color::White),
+            ));
+        }
+    }
+    lines
+}
+
+/// Strip markdown inline formatting (`**bold**`, `` `code` ``) for plain text display.
+fn render_inline_markup(text: &str) -> String {
+    let mut out = text.replace("**", "");
+    // Remove inline backticks.
+    out = out.replace('`', "");
+    out
+}
+
+/// Draw the documentation viewer with sidebar and scrollable content.
+pub fn draw_docs(f: &mut Frame, state: &DocsState) {
+    let area = f.area();
+    f.render_widget(Clear, area);
+
+    let pages = docs_pages();
+
+    // Two-column layout: sidebar (22 chars) | content (rest).
+    let sidebar_width = 24u16.min(area.width / 3);
+    let content_width = area.width.saturating_sub(sidebar_width);
+
+    // Sidebar.
+    let sidebar_area = Rect::new(area.x, area.y, sidebar_width, area.height.saturating_sub(1));
+    let sidebar_block = Block::default()
+        .title(" Docs ")
+        .title_alignment(Alignment::Left)
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::DarkGray));
+    let sidebar_inner = sidebar_block.inner(sidebar_area);
+    f.render_widget(sidebar_block, sidebar_area);
+
+    for (i, page) in pages.iter().enumerate() {
+        if i as u16 >= sidebar_inner.height {
+            break;
+        }
+        let row = Rect::new(
+            sidebar_inner.x,
+            sidebar_inner.y + i as u16,
+            sidebar_inner.width,
+            1,
+        );
+        let style = if i == state.page_index {
+            Style::default().fg(Color::Black).bg(Color::Cyan).bold()
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let label = if i == state.page_index {
+            format!(" > {}", page.title)
+        } else {
+            format!("   {}", page.title)
+        };
+        let item = Paragraph::new(label).style(style);
+        f.render_widget(item, row);
+    }
+
+    // Content panel.
+    let content_area = Rect::new(
+        area.x + sidebar_width,
+        area.y,
+        content_width,
+        area.height.saturating_sub(1),
+    );
+    let content_block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+    let content_inner = content_block.inner(content_area);
+    f.render_widget(content_block, content_area);
+
+    if let Some(page) = pages.get(state.page_index) {
+        // Page title.
+        let title_area = Rect::new(
+            content_inner.x + 1,
+            content_inner.y,
+            content_inner.width.saturating_sub(2),
+            1,
+        );
+        let title = Paragraph::new(page.title).style(Style::default().fg(Color::Yellow).bold());
+        f.render_widget(title, title_area);
+
+        // Rendered markdown content.
+        let body_lines = render_markdown_lines(page.body);
+        let body_area = Rect::new(
+            content_inner.x + 1,
+            content_inner.y + 2,
+            content_inner.width.saturating_sub(2),
+            content_inner.height.saturating_sub(2),
+        );
+
+        let content = Paragraph::new(body_lines)
+            .scroll((state.scroll, 0))
+            .wrap(Wrap { trim: false });
+        f.render_widget(content, body_area);
+    }
+
+    // Hint bar.
+    let hint_y = area.y + area.height - 1;
+    let hint_area = Rect::new(area.x, hint_y, area.width, 1);
+    let hint = Paragraph::new("[↑↓] page  [j/k] scroll  [Esc] back")
         .alignment(Alignment::Center)
         .style(Style::default().fg(Color::DarkGray));
     f.render_widget(hint, hint_area);

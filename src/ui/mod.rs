@@ -81,6 +81,7 @@ pub enum Screen {
     MainMenu(MainMenuState),
     NewGame(NewGameState),
     About(AboutState),
+    Docs(DocsState),
     Settings(SettingsState),
     LlamafileSetup(LlamafileSetupState),
     Playing(PlayingState),
@@ -759,6 +760,7 @@ fn draw_screen(f: &mut Frame, screen: &Screen) {
         Screen::MainMenu(state) => screens::draw_main_menu(f, state),
         Screen::NewGame(state) => screens::draw_new_game(f, state),
         Screen::About(_) => screens::draw_about(f),
+        Screen::Docs(state) => screens::draw_docs(f, state),
         Screen::Settings(state) => screens::draw_settings(f, state),
         Screen::LlamafileSetup(state) => screens::draw_llamafile_setup(f, state),
         Screen::Playing(ps) => layout::draw_playing(f, ps),
@@ -851,6 +853,7 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                         "Settings" => Action::Transition(Screen::Settings(
                             SettingsState::from_config(&app.config),
                         )),
+                        "Docs" => Action::Transition(Screen::Docs(DocsState::new())),
                         "About" => Action::Transition(Screen::About(AboutState)),
                         "Quit" => Action::Quit,
                         _ => Action::None,
@@ -864,6 +867,43 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
         Screen::About(_) => match key {
             KeyCode::Esc | KeyCode::Char('q') | KeyCode::Enter => {
                 Action::Transition(Screen::MainMenu(MainMenuState::new()))
+            }
+            _ => Action::None,
+        },
+
+        Screen::Docs(state) => match key {
+            KeyCode::Esc | KeyCode::Char('q') => {
+                Action::Transition(Screen::MainMenu(MainMenuState::new()))
+            }
+            KeyCode::Up => {
+                if state.page_index > 0 {
+                    state.page_index -= 1;
+                    state.scroll = 0;
+                }
+                Action::None
+            }
+            KeyCode::Down => {
+                if state.page_index + 1 < state.page_count {
+                    state.page_index += 1;
+                    state.scroll = 0;
+                }
+                Action::None
+            }
+            KeyCode::Char('j') => {
+                state.scroll = state.scroll.saturating_add(1);
+                Action::None
+            }
+            KeyCode::Char('k') => {
+                state.scroll = state.scroll.saturating_sub(1);
+                Action::None
+            }
+            KeyCode::PageDown => {
+                state.scroll = state.scroll.saturating_add(20);
+                Action::None
+            }
+            KeyCode::PageUp => {
+                state.scroll = state.scroll.saturating_sub(20);
+                Action::None
             }
             _ => Action::None,
         },
