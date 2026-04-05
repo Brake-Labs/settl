@@ -2085,7 +2085,7 @@ fn handle_settings_input(
 fn handle_personalities_input(state: &mut PersonalitiesState, key: KeyCode) -> Action {
     use screens::{PersonalitiesFocus, PersonalityField, PersonalitySource};
 
-    match &state.focus.clone() {
+    match state.focus {
         PersonalitiesFocus::List => match key {
             KeyCode::Esc => Action::Transition(Screen::MainMenu(MainMenuState::new())),
             KeyCode::Up | KeyCode::Char('k') => {
@@ -2194,108 +2194,106 @@ fn handle_personalities_input(state: &mut PersonalitiesState, key: KeyCode) -> A
             _ => Action::None,
         },
 
-        PersonalitiesFocus::EditText(field) => {
-            let field = *field;
-            match key {
-                KeyCode::Esc => {
-                    state.focus = PersonalitiesFocus::List;
-                    Action::None
+        PersonalitiesFocus::EditText(field) => match key {
+            KeyCode::Esc => {
+                state.focus = PersonalitiesFocus::List;
+                Action::None
+            }
+            KeyCode::Enter | KeyCode::Tab => {
+                // Reject empty names.
+                if field == PersonalityField::Name && state.input_buf.trim().is_empty() {
+                    return Action::None;
                 }
-                KeyCode::Enter | KeyCode::Tab => {
-                    state.commit_edit_text(field);
-                    // Update the filename stem if name changed.
-                    if field == PersonalityField::Name {
-                        if let Some((p, PersonalitySource::Custom(ref mut stem))) =
-                            state.entries.get_mut(state.selected)
-                        {
-                            let old_path = format!("./personalities/{}.toml", stem);
-                            let new_stem = Personality::filename_from_name(&p.name);
-                            let new_stem = find_unique_stem_excluding(&new_stem, stem);
-                            let new_path = format!("./personalities/{}.toml", new_stem);
-                            if old_path != new_path {
-                                let _ = std::fs::rename(&old_path, &new_path);
-                            }
-                            *stem = new_stem;
+                state.commit_edit_text(field);
+                // Update the filename stem if name changed.
+                if field == PersonalityField::Name {
+                    if let Some((p, PersonalitySource::Custom(ref mut stem))) =
+                        state.entries.get_mut(state.selected)
+                    {
+                        let old_path = format!("./personalities/{}.toml", stem);
+                        let new_stem = Personality::filename_from_name(&p.name);
+                        let new_stem = find_unique_stem_excluding(&new_stem, stem);
+                        let new_path = format!("./personalities/{}.toml", new_stem);
+                        if old_path != new_path {
+                            let _ = std::fs::rename(&old_path, &new_path);
                         }
+                        *stem = new_stem;
                     }
-                    state.save_current();
-                    state.next_field(field);
-                    Action::None
                 }
-                KeyCode::Backspace => {
-                    state.input_backspace();
-                    Action::None
-                }
-                KeyCode::Delete => {
-                    state.input_delete();
-                    Action::None
-                }
-                KeyCode::Left => {
-                    state.input_left();
-                    Action::None
-                }
-                KeyCode::Right => {
-                    state.input_right();
-                    Action::None
-                }
-                KeyCode::Home => {
-                    state.input_cursor = 0;
-                    Action::None
-                }
-                KeyCode::End => {
-                    state.input_cursor = state.input_buf.len();
-                    Action::None
-                }
-                KeyCode::Char(ch) => {
-                    state.input_insert(ch);
-                    Action::None
-                }
-                _ => Action::None,
+                state.save_current();
+                state.next_field(field);
+                Action::None
             }
-        }
+            KeyCode::Backspace => {
+                state.input_backspace();
+                Action::None
+            }
+            KeyCode::Delete => {
+                state.input_delete();
+                Action::None
+            }
+            KeyCode::Left => {
+                state.input_left();
+                Action::None
+            }
+            KeyCode::Right => {
+                state.input_right();
+                Action::None
+            }
+            KeyCode::Home => {
+                state.input_cursor = 0;
+                Action::None
+            }
+            KeyCode::End => {
+                state.input_cursor = state.input_buf.len();
+                Action::None
+            }
+            KeyCode::Char(ch) => {
+                state.input_insert(ch);
+                Action::None
+            }
+            _ => Action::None,
+        },
 
-        PersonalitiesFocus::EditSlider(field) => {
-            let field = *field;
-            match key {
-                KeyCode::Esc => {
-                    state.focus = PersonalitiesFocus::List;
-                    Action::None
-                }
-                KeyCode::Enter | KeyCode::Tab => {
-                    state.save_current();
-                    state.next_field(field);
-                    Action::None
-                }
-                KeyCode::Left => {
-                    if let Some((p, _)) = state.entries.get_mut(state.selected) {
-                        let val = match field {
-                            PersonalityField::Aggression => &mut p.aggression,
-                            PersonalityField::Cooperation => &mut p.cooperation,
-                            _ => return Action::None,
-                        };
-                        *val = (*val - 0.1).max(0.0);
-                        // Round to avoid floating-point drift.
-                        *val = (*val * 10.0).round() / 10.0;
-                        state.dirty = true;
-                    }
-                    Action::None
-                }
-                KeyCode::Right => {
-                    if let Some((p, _)) = state.entries.get_mut(state.selected) {
-                        let val = match field {
-                            PersonalityField::Aggression => &mut p.aggression,
-                            PersonalityField::Cooperation => &mut p.cooperation,
-                            _ => return Action::None,
-                        };
-                        *val = (*val + 0.1).min(1.0);
-                        *val = (*val * 10.0).round() / 10.0;
-                        state.dirty = true;
-                    }
-                    Action::None
-                }
-                _ => Action::None,
+        PersonalitiesFocus::EditSlider(field) => match key {
+            KeyCode::Esc => {
+                state.focus = PersonalitiesFocus::List;
+                Action::None
             }
-        }
+            KeyCode::Enter | KeyCode::Tab => {
+                state.save_current();
+                state.next_field(field);
+                Action::None
+            }
+            KeyCode::Left => {
+                if let Some((p, _)) = state.entries.get_mut(state.selected) {
+                    let val = match field {
+                        PersonalityField::Aggression => &mut p.aggression,
+                        PersonalityField::Cooperation => &mut p.cooperation,
+                        _ => return Action::None,
+                    };
+                    *val = (*val - 0.1).max(0.0);
+                    // Round to avoid floating-point drift.
+                    *val = (*val * 10.0).round() / 10.0;
+                    state.dirty = true;
+                }
+                Action::None
+            }
+            KeyCode::Right => {
+                if let Some((p, _)) = state.entries.get_mut(state.selected) {
+                    let val = match field {
+                        PersonalityField::Aggression => &mut p.aggression,
+                        PersonalityField::Cooperation => &mut p.cooperation,
+                        _ => return Action::None,
+                    };
+                    *val = (*val + 0.1).min(1.0);
+                    *val = (*val * 10.0).round() / 10.0;
+                    state.dirty = true;
+                }
+                Action::None
+            }
+            _ => Action::None,
+        },
 
         PersonalitiesFocus::EditCatchphrases => match key {
             KeyCode::Esc | KeyCode::Tab => {

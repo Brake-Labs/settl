@@ -522,7 +522,7 @@ impl SettingsState {
 // ── Personalities Screen ───────────────────────────────────────────────
 
 /// Which field is being edited in a personality.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PersonalityField {
     Name,
     Style,
@@ -532,7 +532,7 @@ pub enum PersonalityField {
 }
 
 /// Sub-focus within the Personalities screen.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PersonalitiesFocus {
     /// Browsing the personality list (left panel).
     List,
