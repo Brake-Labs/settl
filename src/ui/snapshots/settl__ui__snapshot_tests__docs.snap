@@ -15,7 +15,7 @@ expression: buffer_to_string(&buf)
 │                      ││                                                                                                                                                │
 │                      ││ Clone the repo and build with Cargo:                                                                                                           │
 │                      ││                                                                                                                                                │
-│                      ││   git clone https://github.com/Brake-Labs/settl.git                                                                                            │
+│                      ││   git clone https://github.com/mozilla-ai/settl.git                                                                                            │
 │                      ││   cd settl                                                                                                                                     │
 │                      ││   cargo build --release                                                                                                                        │
 │                      ││                                                                                                                                                │

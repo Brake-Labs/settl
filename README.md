@@ -3,7 +3,7 @@
   <p align="center">
     A terminal hex settlement game where you play against LLMs
     <br><br>
-    <a href="https://github.com/Brake-Labs/settl/actions/workflows/ci.yml"><img src="https://github.com/Brake-Labs/settl/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+    <a href="https://github.com/mozilla-ai/settl/actions/workflows/ci.yml"><img src="https://github.com/mozilla-ai/settl/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
     <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0"></a>
     <a href="https://settl.dev"><img src="https://img.shields.io/badge/docs-settl.dev-green" alt="Docs"></a>
     <br>
@@ -17,7 +17,7 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/Brake-Labs/settl.git
+git clone https://github.com/mozilla-ai/settl.git
 cd settl
 cargo run
 ```

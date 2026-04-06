@@ -42,7 +42,7 @@ if (mobileBtn) {
 }
 
 // Fetch GitHub star count
-fetch('https://api.github.com/repos/Brake-Labs/settl')
+fetch('https://api.github.com/repos/mozilla-ai/settl')
   .then(function(res) { return res.json(); })
   .then(function(data) {
     var count = data.stargazers_count;

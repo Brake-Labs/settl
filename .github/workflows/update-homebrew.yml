@@ -1,0 +1,100 @@
+name: Update Homebrew Tap
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  update-tap:
+    name: Update Homebrew Formula
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get release info
+        id: release
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+
+      - name: Download release checksums
+        run: |
+          BASE_URL="https://github.com/mozilla-ai/settl/releases/download/${{ github.event.release.tag_name }}"
+          for name in settl-darwin-amd64 settl-darwin-arm64 settl-linux-amd64 settl-linux-arm64; do
+            curl -fsSL "$BASE_URL/${name}.tar.gz.sha256" -o "${name}.sha256"
+            echo "Downloaded ${name}.sha256:"
+            cat "${name}.sha256"
+          done
+
+      - name: Parse checksums
+        id: sha
+        run: |
+          for name in settl-darwin-amd64 settl-darwin-arm64 settl-linux-amd64 settl-linux-arm64; do
+            sha=$(awk '{print $1}' "${name}.sha256")
+            key=$(echo "$name" | tr '-' '_')
+            echo "${key}=$sha" >> $GITHUB_OUTPUT
+          done
+
+      - name: Clone homebrew tap
+        run: |
+          git clone https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/mozilla-ai/homebrew-tap.git
+
+      - name: Update formula
+        run: |
+          mkdir -p homebrew-tap/Formula
+          cat > homebrew-tap/Formula/settl.rb <<RUBY
+          class Settl < Formula
+            desc "Terminal hex-based settlement game with LLM players"
+            homepage "https://settl.dev"
+            version "${{ steps.release.outputs.version }}"
+            license "Apache-2.0"
+
+            on_macos do
+              if Hardware::CPU.intel?
+                url "https://github.com/mozilla-ai/settl/releases/download/${{ steps.release.outputs.tag }}/settl-darwin-amd64.tar.gz"
+                sha256 "${{ steps.sha.outputs.settl_darwin_amd64 }}"
+              end
+              if Hardware::CPU.arm?
+                url "https://github.com/mozilla-ai/settl/releases/download/${{ steps.release.outputs.tag }}/settl-darwin-arm64.tar.gz"
+                sha256 "${{ steps.sha.outputs.settl_darwin_arm64 }}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.intel?
+                url "https://github.com/mozilla-ai/settl/releases/download/${{ steps.release.outputs.tag }}/settl-linux-amd64.tar.gz"
+                sha256 "${{ steps.sha.outputs.settl_linux_amd64 }}"
+              end
+              if Hardware::CPU.arm?
+                url "https://github.com/mozilla-ai/settl/releases/download/${{ steps.release.outputs.tag }}/settl-linux-arm64.tar.gz"
+                sha256 "${{ steps.sha.outputs.settl_linux_arm64 }}"
+              end
+            end
+
+            def install
+              if OS.mac? && Hardware::CPU.intel?
+                bin.install "settl-darwin-amd64" => "settl"
+              elsif OS.mac? && Hardware::CPU.arm?
+                bin.install "settl-darwin-arm64" => "settl"
+              elsif OS.linux? && Hardware::CPU.intel?
+                bin.install "settl-linux-amd64" => "settl"
+              elsif OS.linux? && Hardware::CPU.arm?
+                bin.install "settl-linux-arm64" => "settl"
+              end
+            end
+
+            test do
+              assert_match "settl", shell_output("#{bin}/settl --help")
+            end
+          end
+          RUBY
+
+      - name: Commit and push
+        run: |
+          cd homebrew-tap
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/settl.rb
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "settl ${{ steps.release.outputs.version }}"
+          git push
