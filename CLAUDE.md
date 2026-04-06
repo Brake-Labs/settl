@@ -13,7 +13,7 @@ cargo test test_name                     # Single test by name
 cargo run                                # Launch TUI (title screen -> menus -> game)
 ```
 
-The binary boots into a TUI (title screen -> main menu -> game setup). AI players run locally via llamafile by default, no API keys needed. For cloud LLM providers, set env vars: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`.
+The binary boots into a TUI (title screen -> main menu -> game setup). AI players run locally via llamafile by default, no API keys needed.
 
 Debug logging writes to `~/.settl/debug.log`. Enabled automatically in debug builds, off in release. Override with env var:
 ```bash
