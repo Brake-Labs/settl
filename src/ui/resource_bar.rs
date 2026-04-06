@@ -102,7 +102,7 @@ fn build_player_lines(
             lines.push(Line::from(vec![
                 Span::raw("  "),
                 Span::styled(
-                    format!("Cards: {}", total),
+                    format!("Resources: {}", total),
                     Style::default().fg(Color::DarkGray),
                 ),
             ]));
@@ -114,7 +114,7 @@ fn build_player_lines(
         let mut extras: Vec<Span> = vec![Span::raw("  ")];
         if dev > 0 {
             extras.push(Span::styled(
-                format!("Dev:{} ", dev),
+                format!("Dev Cards:{} ", dev),
                 Style::default().fg(Color::Cyan),
             ));
         }
@@ -252,8 +252,8 @@ mod tests {
 
         // Opponents show only card count, not resource breakdown.
         assert!(
-            output.contains("Cards: 0"),
-            "opponents should show card count"
+            output.contains("Resources: 0"),
+            "opponents should show resource count"
         );
         // Opponents should NOT have "Wood:" in their section.
         let bob_section = output.split("Bob").nth(1).unwrap_or("");
@@ -282,8 +282,8 @@ mod tests {
             "spectator should see all resources"
         );
         assert!(
-            !output.contains("Cards:"),
-            "spectator mode should not show card counts"
+            !output.contains("Resources:"),
+            "spectator mode should not show resource counts as totals"
         );
     }
 
@@ -297,8 +297,8 @@ mod tests {
         let output = render_to_string(&state, &names, Some(0));
 
         assert!(
-            output.contains("Cards: 5"),
-            "opponent should show total card count of 5"
+            output.contains("Resources: 5"),
+            "opponent should show total resource count of 5"
         );
     }
 }

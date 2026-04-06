@@ -9,13 +9,13 @@ expression: buffer_to_string(&buf)
 │                                                                                                                                  ││  Wheat:0 Ore:0                     │
 │                                                                                                                                  ││                                    │
 │                                                                                                                                  ││ Bob 0VP                            │
-│                                            *                                       *                                             ││  Cards: 0                          │
+│                                            *                                       *                                             ││  Resources: 0                      │
 │                                               3:1                                                                                ││                                    │
 │                                         ╱     ╲             ╱     ╲             ╱     ╲2:Wheat                                   ││ Charlie 0VP                        │
-│                                       ╱         ╲         ╱         ╲         ╱         ╲                                        ││  Cards: 0                          │
+│                                       ╱         ╲         ╱         ╲         ╱         ╲                                        ││  Resources: 0                      │
 │                                     ╱             ╲  *  ╱             ╲     ╱             ╲  *                                   ││                                    │
 │                                    ╱      Ore      ╲   ╱     Sheep     ╲   ╱     Wood      ╲                                     ││ Diana 0VP                          │
-│                                           10                   2                   9                                             ││  Cards: 0                          │
+│                                           10                   2                   9                                             ││  Resources: 0                      │
 │                                    ╲               ╱   ╲               ╱   ╲               ╱                                     ││                                    │
 │                                  *  ╲             ╱     ╲             ╱     ╲             ╱                                      ││Turn: 1                             │
 │                                       ╲         ╱         ╲         ╱         ╲         ╱                                        ││Phase: Setup                        │

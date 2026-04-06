@@ -9,13 +9,13 @@ expression: buffer_to_string(&buf)
 │                                *       ││  Wheat:0 Ore:0                     │
 │                                   3:1  ││                                    │
 │                             ╱     ╲    ││ Bob 0VP                            │
-│                           ╱         ╲  ││  Cards: 0                          │
+│                           ╱         ╲  ││  Resources: 0                      │
 │                         ╱             ╲││                                    │
 │                        ╱      Ore      ││ Charlie 0VP                        │
-│                               10       ││  Cards: 0                          │
+│                               10       ││  Resources: 0                      │
 │                        ╲               ││                                    │
 │                      *  ╲             ╱││ Diana 0VP                          │
-│                           ╲         ╱  ││  Cards: 0                          │
+│                           ╲         ╱  ││  Resources: 0                      │
 │            2:Wood ╱     ╲   ╲     ╱   ╱││                                    │
 │                 ╱         ╲         ╱  ││Turn: 1                             │
 │            *  ╱             ╲     ╱    ││Phase: Setup                        │

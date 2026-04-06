@@ -398,15 +398,15 @@ Two keys. Fast response keeps the game moving.
  ▸ Alice        7VP
    Wood:2 Brick:1 Sheep:0
    Wheat:3 Ore:2
-   Dev:3 Kn:2  ★LR
+   Dev Cards:3 Kn:2  ★LR
 
    Bob          5VP
-   Cards: 4
-   Dev:1
+   Resources: 4
+   Dev Cards:1
 
    Carol        4VP
-   Cards: 3
-   Kn:1
+   Resources: 3
+   Dev Cards:1 Kn:1
 
  Turn 15 | Playing
  Deck: 20 cards

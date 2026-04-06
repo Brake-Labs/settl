@@ -343,12 +343,9 @@ impl GameOrchestrator {
             total: roll,
         };
         self.record_event(dice_event.clone());
-        self.send_narration(format!("{} rolled {} ({} + {})", name, roll, d1, d2));
+        self.send_narration(format!("{} rolled {}", name, roll));
         self.send_ui(
-            format!(
-                "Turn {} -- {} rolled {} ({} + {})",
-                turn_num, name, roll, d1, d2
-            ),
+            format!("Turn {} -- {} rolled {}", turn_num, name, roll),
             Some(dice_event),
         );
 

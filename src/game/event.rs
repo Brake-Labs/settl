@@ -121,18 +121,8 @@ pub fn format_event(event: &GameEvent, player_names: &[String]) -> String {
         GameEvent::InitialRoadPlaced { player, edge } => {
             format!("{} placed road at {}", name(*player), edge)
         }
-        GameEvent::DiceRolled {
-            player,
-            values,
-            total,
-        } => {
-            format!(
-                "{} rolled {} ({} + {})",
-                name(*player),
-                total,
-                values.0,
-                values.1
-            )
+        GameEvent::DiceRolled { player, total, .. } => {
+            format!("{} rolled {}", name(*player), total)
         }
         GameEvent::ResourcesDistributed { distributions } => {
             if distributions.is_empty() {
