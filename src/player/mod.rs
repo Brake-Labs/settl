@@ -91,9 +91,13 @@ impl PlayerChoice {
         }
     }
 
-    /// Whether this choice represents an "End Turn" action.
+    /// Whether this choice is the "dismiss / skip" action (End Turn or Roll Dice).
+    /// Used by the TUI to map Esc to the default safe choice.
     pub fn is_end_turn(&self) -> bool {
-        matches!(self, PlayerChoice::GameAction(Action::EndTurn))
+        matches!(
+            self,
+            PlayerChoice::GameAction(Action::EndTurn) | PlayerChoice::RollDice
+        )
     }
 
     /// Whether this is a "Play dev card" intent.
