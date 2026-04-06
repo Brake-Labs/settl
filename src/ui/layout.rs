@@ -9,7 +9,7 @@ use super::board_view;
 use super::chat_panel;
 use super::game_log;
 use super::resource_bar;
-use super::{InputMode, PlayingState, RightPanelTab, TradeSide};
+use super::{CursorLegal, InputMode, PlayingState, RightPanelTab, TradeSide};
 
 // ── Shared layout ────────────────────────────────────────────────────
 
@@ -251,6 +251,7 @@ fn draw_context_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
 
         InputMode::BoardCursor { legal, .. } => {
             let kind_name = legal.kind_name();
+            let is_roads = matches!(legal, CursorLegal::Roads(_));
             let lines = vec![
                 Line::from(Span::styled(
                     format!(" Place {} -- use arrow keys to navigate", kind_name),
@@ -258,7 +259,11 @@ fn draw_context_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
                 )),
                 Line::from(""),
                 Line::from(Span::styled(
-                    " [Arrows] move  [n/p] next/prev  [Enter] confirm",
+                    if is_roads {
+                        " [j/k/l/m] quick-select  [Arrows] move  [n/p] next/prev  [Enter] confirm"
+                    } else {
+                        " [Arrows] move  [n/p] next/prev  [Enter] confirm"
+                    },
                     Style::default().fg(Color::DarkGray),
                 )),
             ];
