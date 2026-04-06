@@ -1090,21 +1090,21 @@ fn spectating_space_toggles_pause() {
 }
 
 #[test]
-fn spectating_tab_toggles_ai_panel() {
+fn spectating_tab_toggles_right_panel_tab() {
     let (ps, _rx) = make_test_playing_state(InputMode::Spectating);
     let mut app = make_test_app(Screen::Playing(ps));
 
     handle_input(&mut app, KeyCode::Tab);
 
     assert!(match &app.screen {
-        Screen::Playing(ps) => ps.show_ai_panel,
+        Screen::Playing(ps) => ps.right_tab == RightPanelTab::Ai,
         _ => panic!(),
     });
 
     handle_input(&mut app, KeyCode::Tab);
 
-    assert!(!match &app.screen {
-        Screen::Playing(ps) => ps.show_ai_panel,
+    assert!(match &app.screen {
+        Screen::Playing(ps) => ps.right_tab == RightPanelTab::Game,
         _ => panic!(),
     });
 }
@@ -1145,9 +1145,9 @@ fn spectating_l_ignored_without_llamafile() {
 }
 
 #[test]
-fn spectating_jk_scrolls_chat_when_ai_panel_visible() {
+fn spectating_jk_scrolls_chat_when_ai_tab_active() {
     let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
-    ps.show_ai_panel = true;
+    ps.right_tab = RightPanelTab::Ai;
     ps.chat_scroll = 5;
     let mut app = make_test_app(Screen::Playing(ps));
 
@@ -1179,9 +1179,9 @@ fn spectating_q_returns_to_main_menu() {
 // ── Mouse Scroll ─────────────────────────────────────────────────────
 
 #[test]
-fn mouse_scroll_down_scrolls_chat_when_ai_panel_visible() {
+fn mouse_scroll_down_scrolls_chat_when_ai_tab_active() {
     let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
-    ps.show_ai_panel = true;
+    ps.right_tab = RightPanelTab::Ai;
     ps.chat_scroll = 0;
 
     handle_mouse_scroll(&mut ps, MouseEventKind::ScrollDown);
@@ -1192,9 +1192,9 @@ fn mouse_scroll_down_scrolls_chat_when_ai_panel_visible() {
 }
 
 #[test]
-fn mouse_scroll_up_scrolls_chat_when_ai_panel_visible() {
+fn mouse_scroll_up_scrolls_chat_when_ai_tab_active() {
     let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
-    ps.show_ai_panel = true;
+    ps.right_tab = RightPanelTab::Ai;
     ps.chat_scroll = 10;
 
     handle_mouse_scroll(&mut ps, MouseEventKind::ScrollUp);
@@ -1202,9 +1202,9 @@ fn mouse_scroll_up_scrolls_chat_when_ai_panel_visible() {
 }
 
 #[test]
-fn mouse_scroll_affects_game_log_when_ai_panel_hidden() {
+fn mouse_scroll_affects_game_log_when_game_tab_active() {
     let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
-    ps.show_ai_panel = false;
+    ps.right_tab = RightPanelTab::Game;
     ps.log_scroll = 0;
 
     handle_mouse_scroll(&mut ps, MouseEventKind::ScrollDown);
@@ -1227,7 +1227,7 @@ fn mouse_scroll_affects_llamafile_log_when_visible() {
 #[test]
 fn mouse_scroll_up_does_not_underflow() {
     let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
-    ps.show_ai_panel = true;
+    ps.right_tab = RightPanelTab::Ai;
     ps.chat_scroll = 1;
 
     handle_mouse_scroll(&mut ps, MouseEventKind::ScrollUp);
