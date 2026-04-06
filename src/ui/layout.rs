@@ -579,6 +579,7 @@ fn draw_help_overlay(f: &mut Frame, area: Rect) {
         )),
         Line::from("  Arrows   Move between legal positions"),
         Line::from("  n / p    Next / previous position"),
+        Line::from("  j/k/l/m  Quick-select road (roads only)"),
         Line::from("  Enter    Confirm placement"),
         Line::from(""),
         Line::from(Span::styled(

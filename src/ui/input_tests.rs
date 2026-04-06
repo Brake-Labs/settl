@@ -1473,6 +1473,41 @@ fn road_k_quickselects_second_position() {
 }
 
 #[test]
+fn road_l_quickselects_third_position() {
+    use crate::game::board::{EdgeCoord, EdgeDirection, HexCoord};
+
+    let edges = vec![
+        EdgeCoord::new(HexCoord::new(0, 0), EdgeDirection::NorthEast),
+        EdgeCoord::new(HexCoord::new(0, 0), EdgeDirection::East),
+        EdgeCoord::new(HexCoord::new(0, 0), EdgeDirection::SouthEast),
+    ];
+    let positions = vec![
+        CursorTarget {
+            screen_col: 10,
+            screen_row: 5,
+        },
+        CursorTarget {
+            screen_col: 20,
+            screen_row: 5,
+        },
+        CursorTarget {
+            screen_col: 30,
+            screen_row: 5,
+        },
+    ];
+    let (ps, mut rx) = make_test_playing_state(InputMode::BoardCursor {
+        legal: CursorLegal::Roads(edges),
+        positions,
+        selected: 0,
+    });
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('l'));
+    let resp = rx.try_recv().unwrap();
+    assert!(matches!(resp, HumanResponse::Index(2)), "l selects index 2");
+}
+
+#[test]
 fn road_m_quickselects_fourth_position() {
     use crate::game::board::{EdgeCoord, EdgeDirection, HexCoord};
 
