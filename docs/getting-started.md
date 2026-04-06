@@ -10,7 +10,13 @@ settl is a terminal hex settlement game where AI players compete using tool-call
 
 ## Installation
 
-Clone the repo and build with Cargo:
+### Homebrew (macOS / Linux)
+
+```bash
+brew install --cask mozilla-ai/tap/settl
+```
+
+### From source
 
 ```bash
 git clone https://github.com/mozilla-ai/settl.git
@@ -25,7 +31,8 @@ The binary is at `target/release/settl`.
 Launch the TUI:
 
 ```bash
-cargo run
+settl              # if installed via brew
+cargo run          # if built from source
 ```
 
 This opens the title screen. Select **New Game** to configure players and start.

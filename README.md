@@ -14,7 +14,13 @@
   <img src="assets/demo.gif" alt="settl demo" width="1200" />
 </p>
 
-## Quick Start
+## Install
+
+```bash
+brew install --cask mozilla-ai/tap/settl
+```
+
+Or build from source:
 
 ```bash
 git clone https://github.com/mozilla-ai/settl.git
@@ -26,7 +32,7 @@ Runs entirely offline using [llamafile](https://github.com/mozilla-ai/llamafile)
 
 ## Related Projects
 
-- **[Agent of Empires](https://github.com/njbrake/agent-of-empires)** - A terminal session manager for AI coding agents. Run settl inside AoE to toggle between the game and your other coding agent sessions.
+- **[Agent of Empires](https://github.com/njbrake/agent-of-empires)** - A terminal session manager for AI coding agents. If settl is installed, AoE automatically detects it and lets you spin up a settl session alongside your coding agents.
 - **[llamafile](https://github.com/mozilla-ai/llamafile)** - One-file LLM inference. settl downloads and runs a llamafile automatically so AI players work offline with zero setup.
 - **[Bonsai Models by PrismML](https://prismml.com/)** - Ultra-efficient 1-bit quantized language models that power settl's default AI players.
 

@@ -3,23 +3,32 @@ name: Update Homebrew Tap
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g., v0.1.1)'
+        required: true
 
 jobs:
   update-tap:
-    name: Update Homebrew Formula
+    name: Update Homebrew Cask
     runs-on: ubuntu-latest
     steps:
       - name: Get release info
         id: release
         run: |
-          VERSION="${{ github.event.release.tag_name }}"
-          VERSION="${VERSION#v}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${{ github.event.release.tag_name }}"
+          fi
+          VERSION="${TAG#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "tag=${{ github.event.release.tag_name }}" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
 
       - name: Download release checksums
         run: |
-          BASE_URL="https://github.com/mozilla-ai/settl/releases/download/${{ github.event.release.tag_name }}"
+          BASE_URL="https://github.com/mozilla-ai/settl/releases/download/${{ steps.release.outputs.tag }}"
           for name in settl-darwin-amd64 settl-darwin-arm64 settl-linux-amd64 settl-linux-arm64; do
             curl -fsSL "$BASE_URL/${name}.tar.gz.sha256" -o "${name}.sha256"
             echo "Downloaded ${name}.sha256:"
@@ -39,52 +48,50 @@ jobs:
         run: |
           git clone https://x-access-token:${{ secrets.HOMEBREW_TAP_TOKEN }}@github.com/mozilla-ai/homebrew-tap.git
 
-      - name: Update formula
+      - name: Update cask
         run: |
-          mkdir -p homebrew-tap/Formula
-          cat > homebrew-tap/Formula/settl.rb <<RUBY
-          class Settl < Formula
+          mkdir -p homebrew-tap/Casks
+          cat > homebrew-tap/Casks/settl.rb <<RUBY
+          cask "settl" do
+            name "settl"
             desc "Terminal hex-based settlement game with LLM players"
-            homepage "https://mozilla-ai.github.io/settl/"
+            homepage "https://github.com/mozilla-ai/settl"
             version "${{ steps.release.outputs.version }}"
-            license "Apache-2.0"
+
+            livecheck do
+              skip "Auto-generated on release."
+            end
 
             on_macos do
-              if Hardware::CPU.intel?
+              on_intel do
                 url "https://github.com/mozilla-ai/settl/releases/download/${{ steps.release.outputs.tag }}/settl-darwin-amd64.tar.gz"
                 sha256 "${{ steps.sha.outputs.settl_darwin_amd64 }}"
+                binary "settl-darwin-amd64", target: "settl"
               end
-              if Hardware::CPU.arm?
+              on_arm do
                 url "https://github.com/mozilla-ai/settl/releases/download/${{ steps.release.outputs.tag }}/settl-darwin-arm64.tar.gz"
                 sha256 "${{ steps.sha.outputs.settl_darwin_arm64 }}"
+                binary "settl-darwin-arm64", target: "settl"
               end
             end
 
             on_linux do
-              if Hardware::CPU.intel?
+              on_intel do
                 url "https://github.com/mozilla-ai/settl/releases/download/${{ steps.release.outputs.tag }}/settl-linux-amd64.tar.gz"
                 sha256 "${{ steps.sha.outputs.settl_linux_amd64 }}"
+                binary "settl-linux-amd64", target: "settl"
               end
-              if Hardware::CPU.arm?
+              on_arm do
                 url "https://github.com/mozilla-ai/settl/releases/download/${{ steps.release.outputs.tag }}/settl-linux-arm64.tar.gz"
                 sha256 "${{ steps.sha.outputs.settl_linux_arm64 }}"
+                binary "settl-linux-arm64", target: "settl"
               end
             end
 
-            def install
-              if OS.mac? && Hardware::CPU.intel?
-                bin.install "settl-darwin-amd64" => "settl"
-              elsif OS.mac? && Hardware::CPU.arm?
-                bin.install "settl-darwin-arm64" => "settl"
-              elsif OS.linux? && Hardware::CPU.intel?
-                bin.install "settl-linux-amd64" => "settl"
-              elsif OS.linux? && Hardware::CPU.arm?
-                bin.install "settl-linux-arm64" => "settl"
+            postflight do
+              if OS.mac?
+                system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", staged_path.to_s], sudo: false
               end
-            end
-
-            test do
-              assert_match "settl", shell_output("#{bin}/settl --help")
             end
           end
           RUBY
@@ -94,7 +101,7 @@ jobs:
           cd homebrew-tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/settl.rb
+          git add Casks/settl.rb
           git diff --cached --quiet && echo "No changes" && exit 0
           git commit -m "settl ${{ steps.release.outputs.version }}"
           git push

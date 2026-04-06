@@ -35,9 +35,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
           </div>
           <div class="px-5 py-4 font-mono text-sm md:text-base flex items-center justify-between gap-4">
             <code class="text-gray-100 overflow-x-auto">
-              <span class="text-gray-500 select-none">$ </span><span class="text-brand-400">git clone</span> https://github.com/mozilla-ai/settl.git && <span class="text-brand-400">cd</span> settl && <span class="text-brand-400">cargo</span> run
+              <span class="text-gray-500 select-none">$ </span><span class="text-brand-400">brew install</span> --cask mozilla-ai/tap/settl
             </code>
-            <button onclick="copyCommand('git clone https://github.com/mozilla-ai/settl.git && cd settl && cargo run', this)" class="install-copy-btn text-gray-500 hover:text-brand-400 transition-colors p-2 rounded-lg hover:bg-surface-700/50 flex-shrink-0" title="Copy to clipboard">
+            <button onclick="copyCommand('brew install --cask mozilla-ai/tap/settl', this)" class="install-copy-btn text-gray-500 hover:text-brand-400 transition-colors p-2 rounded-lg hover:bg-surface-700/50 flex-shrink-0" title="Copy to clipboard">
               <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/>
               </svg>
@@ -45,6 +45,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
           </div>
         </div>
         <p class="text-sm text-gray-500 mt-3">
+          Or build from source: <code class="text-gray-400">git clone https://github.com/mozilla-ai/settl.git && cd settl && cargo run</code>
+        </p>
+        <p class="text-sm text-gray-500 mt-1">
           Runs entirely offline using <a href="https://github.com/mozilla-ai/llamafile" class="text-gray-400 hover:text-white transition-colors">llamafile</a>. No API keys required.
         </p>
       </div>
@@ -66,7 +69,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         <ul class="space-y-3 text-sm">
           <li>
             <a href="https://github.com/njbrake/agent-of-empires" class="text-gray-100 hover:text-white transition-colors font-medium" target="_blank" rel="noopener">Agent of Empires</a>
-            <span class="text-gray-500"> - Terminal session manager for AI coding agents</span>
+            <span class="text-gray-500"> - Terminal session manager for AI coding agents. Install settl and AoE automatically detects it, letting you spin up a game session</span>
           </li>
           <li>
             <a href="https://github.com/mozilla-ai/llamafile" class="text-gray-100 hover:text-white transition-colors font-medium" target="_blank" rel="noopener">llamafile</a>

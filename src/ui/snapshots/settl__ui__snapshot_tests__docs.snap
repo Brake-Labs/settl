@@ -1,5 +1,6 @@
 ---
 source: src/ui/snapshot_tests.rs
+assertion_line: 61
 expression: buffer_to_string(&buf)
 ---
 ┌ Docs ────────────────┐┌────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┐
@@ -13,7 +14,13 @@ expression: buffer_to_string(&buf)
 │                      ││ Installation                                                                                                                                   │
 │                      ││ ------------                                                                                                                                   │
 │                      ││                                                                                                                                                │
-│                      ││ Clone the repo and build with Cargo:                                                                                                           │
+│                      ││                                                                                                                                                │
+│                      ││ Homebrew (macOS / Linux)                                                                                                                       │
+│                      ││                                                                                                                                                │
+│                      ││   brew install --cask mozilla-ai/tap/settl                                                                                                     │
+│                      ││                                                                                                                                                │
+│                      ││                                                                                                                                                │
+│                      ││ From source                                                                                                                                    │
 │                      ││                                                                                                                                                │
 │                      ││   git clone https://github.com/mozilla-ai/settl.git                                                                                            │
 │                      ││   cd settl                                                                                                                                     │
@@ -27,7 +34,8 @@ expression: buffer_to_string(&buf)
 │                      ││                                                                                                                                                │
 │                      ││ Launch the TUI:                                                                                                                                │
 │                      ││                                                                                                                                                │
-│                      ││   cargo run                                                                                                                                    │
+│                      ││   settl              # if installed via brew                                                                                                   │
+│                      ││   cargo run          # if built from source                                                                                                    │
 │                      ││                                                                                                                                                │
 │                      ││ This opens the title screen. Select New Game to configure players and start.                                                                   │
 │                      ││                                                                                                                                                │
@@ -58,12 +66,5 @@ expression: buffer_to_string(&buf)
 │                      ││                                                                                                                                                │
 │                      ││   | Flag | Description | Default |                                                                                                             │
 │                      ││   | `--headless` | Run in text mode (no TUI) | off |                                                                                           │
-│                      ││   | `--demo` | Random AI players, no API keys | off |                                                                                          │
-│                      ││   | `-p, --players N` | Number of players (2-4) | 4 |                                                                                          │
-│                      ││   | `-m, --model MODEL` | Default LLM model | claude-sonnet-4-6 |                                                                              │
-│                      ││   | `--models M1,M2,...` | Per-player model assignment | -- |                                                                                  │
-│                      ││   | `--personality FILE` | TOML personality file | built-in |                                                                                  │
-│                      ││   | `--seed N` | RNG seed for reproducible boards | random |                                                                                   │
-│                      ││                                                                                                                                                │
 └──────────────────────┘└────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
                                                                     [↑↓] page  [j/k] scroll  [Esc] back
