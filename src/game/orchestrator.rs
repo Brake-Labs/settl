@@ -167,12 +167,19 @@ impl GameOrchestrator {
 
     /// Run the full game and return the winner's PlayerId.
     pub async fn run(&mut self) -> Result<PlayerId, OrchestratorError> {
+        log::info!(
+            "Game starting: {} players [{}]",
+            self.state.num_players,
+            self.player_names.join(", ")
+        );
+
         // Send initial state so the TUI can render the board before any prompts arrive.
         self.send_ui("Game starting...".into(), None);
 
         // Skip setup if the game is already past the setup phase (e.g. resumed).
         if matches!(self.state.phase, GamePhase::Setup { .. }) {
             self.run_setup().await?;
+            log::info!("Setup phase complete");
 
             // Transition to Playing phase.
             self.state.phase = GamePhase::Playing {
@@ -207,6 +214,12 @@ impl GameOrchestrator {
             }
             if let Some(winner) = turn_result? {
                 let vp = self.state.victory_points(winner);
+                log::info!(
+                    "Game over: {} wins with {} VP on turn {}",
+                    self.player_names[winner],
+                    vp,
+                    self.state.turn_number
+                );
                 let msg = format!("{} wins with {} VP!", self.player_names[winner], vp);
                 self.record_event(GameEvent::GameWon {
                     player: winner,
@@ -324,6 +337,14 @@ impl GameOrchestrator {
         let is_human = self.players[player_id].is_human();
         let name = self.player_names[player_id].clone();
         let turn_num = self.state.turn_number + 1;
+        let kind = if is_human { "human" } else { "AI" };
+        log::info!(
+            "Turn {} start: {} (player {}, {})",
+            turn_num,
+            name,
+            player_id,
+            kind
+        );
 
         self.record_event(GameEvent::TurnStarted {
             player: player_id,
@@ -372,6 +393,14 @@ impl GameOrchestrator {
         // Step 1: Roll dice.
         let (d1, d2) = dice::roll_dice(&mut rand::rng());
         let roll = d1 + d2;
+        log::info!(
+            "Turn {}: {} rolled {} ({}+{})",
+            turn_num,
+            name,
+            roll,
+            d1,
+            d2
+        );
 
         let dice_event = GameEvent::DiceRolled {
             player: player_id,
@@ -387,6 +416,7 @@ impl GameOrchestrator {
 
         // Step 2: Handle the roll.
         if roll == 7 {
+            log::info!("Turn {}: rolled 7, entering robber flow", turn_num);
             self.send_narration(format!("{} rolled 7! Robber activates.", name));
             self.handle_seven(player_id).await?;
         } else {
@@ -434,6 +464,7 @@ impl GameOrchestrator {
             let action_result = match choice {
                 PlayerChoice::GameAction(action) => {
                     if matches!(action, Action::EndTurn) {
+                        log::info!("Turn {}: {} ends turn", turn_num, name);
                         self.send_narration(format!("{} ends their turn.", name));
                         self.end_turn(player_id);
                         return Ok(None);
@@ -460,20 +491,28 @@ impl GameOrchestrator {
                     if is_trade {
                         trade_count += 1;
                     }
+                    log::info!("Turn {}: {} -> {}", turn_num, name, choice);
                     self.send_narration(self.narrate_choice(player_id, choice));
                     self.send_ui(format!("{}: {}", name, choice), None);
                     if let Some(winner) = rules::check_victory(&self.state) {
                         return Ok(Some(winner));
                     }
                 }
-                Err(OrchestratorError::RuleViolation(_msg)) => {
-                    // Action was invalid -- don't count it against the limit.
+                Err(OrchestratorError::RuleViolation(ref msg)) => {
+                    log::warn!("Turn {}: {} action rejected: {}", turn_num, name, msg);
                 }
                 Err(e) => return Err(e),
             }
         }
 
         // If we hit the action limit, force end turn.
+        log::warn!(
+            "Turn {}: {} hit action limit ({} actions, {} attempts), forcing end turn",
+            turn_num,
+            name,
+            action_count,
+            attempt_count
+        );
         self.end_turn(player_id);
         Ok(None)
     }
@@ -613,6 +652,11 @@ impl GameOrchestrator {
                 .await;
             self.send_reasoning(p, &discard_reasoning);
 
+            log::info!(
+                "Discard: {} discards {} cards",
+                self.player_names[p],
+                cards.len()
+            );
             rules::apply_discard(&mut self.state, p, &cards)
                 .map_err(|e| OrchestratorError::RuleViolation(format!("Discard: {}", e)))?;
 
@@ -644,6 +688,13 @@ impl GameOrchestrator {
             .await;
         let hex = legal_hexes[h_idx.min(legal_hexes.len() - 1)];
         self.send_reasoning(roller, &robber_reasoning);
+        log::info!(
+            "Robber: {} moves robber to ({},{}) [{} legal hexes]",
+            self.player_names[roller],
+            hex.q,
+            hex.r,
+            legal_hexes.len()
+        );
 
         rules::apply_move_robber(&mut self.state, hex)
             .map_err(|e| OrchestratorError::RuleViolation(format!("Move robber: {}", e)))?;
@@ -667,6 +718,11 @@ impl GameOrchestrator {
                 self.send_reasoning(roller, &steal_reasoning);
                 let target = targets[t_idx.min(targets.len() - 1)];
 
+                log::info!(
+                    "Steal: {} steals from {}",
+                    self.player_names[roller],
+                    self.player_names[target]
+                );
                 self.send_narration(format!(
                     "{} stole from {}!",
                     self.player_names[roller], self.player_names[target]
