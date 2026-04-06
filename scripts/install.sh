@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-REPO="Brake-Labs/settl"
+REPO="mozilla-ai/settl"
 INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
 BINARY_NAME="settl"
 

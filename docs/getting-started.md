@@ -13,7 +13,7 @@ settl is a terminal hex settlement game where AI players compete using tool-call
 Clone the repo and build with Cargo:
 
 ```bash
-git clone https://github.com/Brake-Labs/settl.git
+git clone https://github.com/mozilla-ai/settl.git
 cd settl
 cargo build --release
 ```
