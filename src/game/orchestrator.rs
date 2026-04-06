@@ -135,6 +135,20 @@ impl GameOrchestrator {
         }
     }
 
+    /// Fire a `TurnStarted` hook (without recording an event) to signal
+    /// that a human player finished a mid-turn wait (trade response,
+    /// discard, robber placement). This transitions external status
+    /// trackers (e.g. AoE) from "waiting" back to "running".
+    fn maybe_human_done_waiting(&self, player_id: PlayerId) {
+        if self.players[player_id].is_human() {
+            let event = GameEvent::TurnStarted {
+                player: self.state.current_player(),
+                is_human: self.players[self.state.current_player()].is_human(),
+            };
+            crate::hooks::fire(&self.hooks, &event, &self.player_names);
+        }
+    }
+
     /// Record a game event for LLM history context and fire hooks.
     fn record_event(&mut self, event: GameEvent) {
         crate::hooks::fire(&self.hooks, &event, &self.player_names);
@@ -650,6 +664,7 @@ impl GameOrchestrator {
                     (Vec::new(), "timeout fallback".into()),
                 )
                 .await;
+            self.maybe_human_done_waiting(p);
             self.send_reasoning(p, &discard_reasoning);
 
             log::info!(
@@ -686,6 +701,7 @@ impl GameOrchestrator {
                 (0, "timeout fallback".into()),
             )
             .await;
+        self.maybe_human_done_waiting(roller);
         let hex = legal_hexes[h_idx.min(legal_hexes.len() - 1)];
         self.send_reasoning(roller, &robber_reasoning);
         log::info!(
@@ -1168,6 +1184,7 @@ impl GameOrchestrator {
                     ),
                 )
                 .await;
+            self.maybe_human_done_waiting(other_id);
 
             match response {
                 TradeResponse::Accept => {
@@ -1374,6 +1391,17 @@ mod tests {
         assert!(
             orch.events.is_empty(),
             "Should not emit WaitingForHuman for RandomPlayer"
+        );
+    }
+
+    #[test]
+    fn maybe_human_done_waiting_does_not_record_event() {
+        let orch = make_orchestrator(3);
+        // RandomPlayers are not human, so this should be a no-op.
+        orch.maybe_human_done_waiting(0);
+        assert!(
+            orch.events.is_empty(),
+            "Should not record any event for non-human player"
         );
     }
 
