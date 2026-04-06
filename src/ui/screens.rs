@@ -1087,7 +1087,7 @@ pub fn draw_new_game(f: &mut Frame, state: &NewGameState) {
     let content_height: u16 = 21;
     let content_width = 64u16.min(area.width.saturating_sub(4));
     let x_start = area.x + (area.width.saturating_sub(content_width)) / 2;
-    let top = area.y + area.height.saturating_sub(content_height) / 2;
+    let top = area.y + (area.height.saturating_sub(content_height)) / 2;
 
     // Title.
     let title_area = Rect::new(x_start, top, content_width, 1);

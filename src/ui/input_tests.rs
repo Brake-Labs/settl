@@ -443,6 +443,43 @@ fn new_game_enter_toggles_friendly_robber() {
 }
 
 #[test]
+fn new_game_tab_cycles_value() {
+    let mut app = new_game_app();
+    if let Screen::NewGame(ref mut state) = app.screen {
+        state.focus = NewGameFocus::FriendlyRobber;
+    }
+    let action = handle_input(&mut app, KeyCode::Tab);
+    assert!(matches!(action, Action::None));
+    let is_on = match &app.screen {
+        Screen::NewGame(s) => s.friendly_robber,
+        _ => panic!(),
+    };
+    assert!(is_on, "Tab should toggle friendly robber on");
+}
+
+#[test]
+fn new_game_h_l_cycle_value() {
+    let mut app = new_game_app();
+    if let Screen::NewGame(ref mut state) = app.screen {
+        state.focus = NewGameFocus::FriendlyRobber;
+    }
+    // 'l' cycles forward (on).
+    handle_input(&mut app, KeyCode::Char('l'));
+    let on = match &app.screen {
+        Screen::NewGame(s) => s.friendly_robber,
+        _ => panic!(),
+    };
+    assert!(on, "'l' should toggle friendly robber on");
+    // 'h' cycles backward (off).
+    handle_input(&mut app, KeyCode::Char('h'));
+    let off = match &app.screen {
+        Screen::NewGame(s) => s.friendly_robber,
+        _ => panic!(),
+    };
+    assert!(!off, "'h' should toggle friendly robber off");
+}
+
+#[test]
 fn new_game_ram_warning_enter_proceeds() {
     let mut app = new_game_app();
     if let Screen::NewGame(ref mut state) = app.screen {
