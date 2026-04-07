@@ -206,6 +206,10 @@ pub struct PlayingState {
     pub game_over_winner: Option<(usize, String)>,
     pub log_scroll: u16,
     pub chat_scroll: u16,
+    /// Whether to auto-scroll the game log when new messages arrive.
+    pub log_auto_scroll: bool,
+    /// Whether to auto-scroll the AI chat when new messages arrive.
+    pub chat_auto_scroll: bool,
     /// Which tab is showing in the sidebar (Game or AI).
     pub sidebar_tab: SidebarTab,
     /// Whether to show the help overlay (? toggle).
@@ -251,6 +255,8 @@ impl PlayingState {
             game_over_winner: None,
             log_scroll: 0,
             chat_scroll: 0,
+            log_auto_scroll: true,
+            chat_auto_scroll: true,
             sidebar_tab: SidebarTab::Game,
             show_help: false,
             show_llamafile_log: false,
@@ -279,14 +285,21 @@ impl PlayingState {
     }
 
     /// Push a message to the game log, capping at MAX_MESSAGES to prevent
-    /// unbounded growth. Auto-scrolls to the latest message.
+    /// unbounded growth. Auto-scrolls to the latest message unless the user
+    /// has manually scrolled away (auto_scroll off).
     fn push_message(&mut self, msg: String) {
         const MAX_MESSAGES: usize = 2000;
         self.messages.push(msg);
         if self.messages.len() > MAX_MESSAGES {
-            self.messages.drain(..self.messages.len() - MAX_MESSAGES);
+            let drain_count = self.messages.len() - MAX_MESSAGES;
+            self.messages.drain(..drain_count);
+            if !self.log_auto_scroll {
+                self.log_scroll = self.log_scroll.saturating_sub(drain_count as u16);
+            }
         }
-        self.log_scroll = self.messages.len().saturating_sub(1) as u16;
+        if self.log_auto_scroll {
+            self.log_scroll = u16::MAX;
+        }
     }
 
     /// Convert an incoming HumanPrompt into the appropriate InputMode.
@@ -429,10 +442,15 @@ impl PlayingState {
                 }
                 const MAX_CHAT: usize = 500;
                 if self.chat_messages.len() > MAX_CHAT {
-                    self.chat_messages
-                        .drain(..self.chat_messages.len() - MAX_CHAT);
+                    let drain_count = self.chat_messages.len() - MAX_CHAT;
+                    self.chat_messages.drain(..drain_count);
+                    if !self.chat_auto_scroll {
+                        self.chat_scroll = self.chat_scroll.saturating_sub(drain_count as u16);
+                    }
                 }
-                self.chat_scroll = u16::MAX; // Auto-scroll to bottom.
+                if self.chat_auto_scroll {
+                    self.chat_scroll = u16::MAX;
+                }
             }
             UiEvent::AiReasoningChunk {
                 player_id,
@@ -461,7 +479,9 @@ impl PlayingState {
                         kind: chat_panel::ChatMessageKind::Reasoning,
                     });
                 }
-                self.chat_scroll = u16::MAX; // Auto-scroll to bottom.
+                if self.chat_auto_scroll {
+                    self.chat_scroll = u16::MAX;
+                }
             }
             UiEvent::Narration { message } => {
                 self.chat_messages.push(chat_panel::ChatMessage {
@@ -472,10 +492,15 @@ impl PlayingState {
                 });
                 const MAX_CHAT: usize = 500;
                 if self.chat_messages.len() > MAX_CHAT {
-                    self.chat_messages
-                        .drain(..self.chat_messages.len() - MAX_CHAT);
+                    let drain_count = self.chat_messages.len() - MAX_CHAT;
+                    self.chat_messages.drain(..drain_count);
+                    if !self.chat_auto_scroll {
+                        self.chat_scroll = self.chat_scroll.saturating_sub(drain_count as u16);
+                    }
                 }
-                self.chat_scroll = u16::MAX; // Auto-scroll to bottom.
+                if self.chat_auto_scroll {
+                    self.chat_scroll = u16::MAX;
+                }
             }
             UiEvent::GameOver { winner, message } => {
                 let winner_name = self
@@ -888,6 +913,34 @@ fn draw_size_warning(f: &mut Frame) {
     f.render_widget(para, inner);
 }
 
+// ── Sidebar Scroll ───────────────────────────────────────────────────
+
+/// Scroll the active sidebar panel by `lines` in the given direction.
+/// Disables auto-scroll so new messages don't snap the viewport.
+fn sidebar_scroll(ps: &mut PlayingState, up: bool, lines: u16) {
+    if ps.show_llamafile_log {
+        if up {
+            ps.llamafile_log_scroll = ps.llamafile_log_scroll.saturating_sub(lines);
+        } else {
+            ps.llamafile_log_scroll = ps.llamafile_log_scroll.saturating_add(lines);
+        }
+    } else if ps.sidebar_tab == SidebarTab::Ai {
+        ps.chat_auto_scroll = false;
+        if up {
+            ps.chat_scroll = ps.chat_scroll.saturating_sub(lines);
+        } else {
+            ps.chat_scroll = ps.chat_scroll.saturating_add(lines);
+        }
+    } else {
+        ps.log_auto_scroll = false;
+        if up {
+            ps.log_scroll = ps.log_scroll.saturating_sub(lines);
+        } else {
+            ps.log_scroll = ps.log_scroll.saturating_add(lines);
+        }
+    }
+}
+
 // ── Mouse Scroll ──────────────────────────────────────────────────────
 
 /// Scroll step per mouse wheel tick (3 lines matches common terminal defaults).
@@ -895,26 +948,8 @@ const MOUSE_SCROLL_LINES: u16 = 3;
 
 fn handle_mouse_scroll(ps: &mut PlayingState, kind: MouseEventKind) {
     match kind {
-        MouseEventKind::ScrollUp => {
-            if ps.show_llamafile_log {
-                ps.llamafile_log_scroll =
-                    ps.llamafile_log_scroll.saturating_sub(MOUSE_SCROLL_LINES);
-            } else if ps.sidebar_tab == SidebarTab::Ai {
-                ps.chat_scroll = ps.chat_scroll.saturating_sub(MOUSE_SCROLL_LINES);
-            } else {
-                ps.log_scroll = ps.log_scroll.saturating_sub(MOUSE_SCROLL_LINES);
-            }
-        }
-        MouseEventKind::ScrollDown => {
-            if ps.show_llamafile_log {
-                ps.llamafile_log_scroll =
-                    ps.llamafile_log_scroll.saturating_add(MOUSE_SCROLL_LINES);
-            } else if ps.sidebar_tab == SidebarTab::Ai {
-                ps.chat_scroll = ps.chat_scroll.saturating_add(MOUSE_SCROLL_LINES);
-            } else {
-                ps.log_scroll = ps.log_scroll.saturating_add(MOUSE_SCROLL_LINES);
-            }
-        }
+        MouseEventKind::ScrollUp => sidebar_scroll(ps, true, MOUSE_SCROLL_LINES),
+        MouseEventKind::ScrollDown => sidebar_scroll(ps, false, MOUSE_SCROLL_LINES),
         _ => {}
     }
 }
@@ -1135,6 +1170,59 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                     ps.show_llamafile_log = !ps.show_llamafile_log;
                     return Action::None;
                 }
+                // Global sidebar scroll: j/k work in all modes EXCEPT
+                // BoardCursor and StealTarget (which use j/k for navigation).
+                KeyCode::Char('j') | KeyCode::Char('k')
+                    if !matches!(
+                        ps.input_mode,
+                        InputMode::BoardCursor { .. } | InputMode::StealTarget { .. }
+                    ) =>
+                {
+                    let up = key == KeyCode::Char('k');
+                    sidebar_scroll(ps, up, 1);
+                    return Action::None;
+                }
+                // Arrow keys scroll the sidebar only in Spectating mode
+                // (other modes use arrows for their own navigation).
+                KeyCode::Up | KeyCode::Down if matches!(ps.input_mode, InputMode::Spectating) => {
+                    let up = key == KeyCode::Up;
+                    sidebar_scroll(ps, up, 1);
+                    return Action::None;
+                }
+                // PageUp/PageDown for fast scrolling. Excluded from BoardCursor
+                // and StealTarget to avoid accidental sidebar jumps during placement.
+                KeyCode::PageUp
+                    if !matches!(
+                        ps.input_mode,
+                        InputMode::BoardCursor { .. } | InputMode::StealTarget { .. }
+                    ) =>
+                {
+                    sidebar_scroll(ps, true, 10);
+                    return Action::None;
+                }
+                KeyCode::PageDown
+                    if !matches!(
+                        ps.input_mode,
+                        InputMode::BoardCursor { .. } | InputMode::StealTarget { .. }
+                    ) =>
+                {
+                    sidebar_scroll(ps, false, 10);
+                    return Action::None;
+                }
+                // G jumps to the bottom of the active panel and re-enables
+                // auto-scroll so new messages resume following.
+                KeyCode::Char('G') => {
+                    if ps.show_llamafile_log {
+                        ps.llamafile_log_scroll = u16::MAX;
+                    } else if ps.sidebar_tab == SidebarTab::Ai {
+                        ps.chat_scroll = u16::MAX;
+                        ps.chat_auto_scroll = true;
+                    } else {
+                        ps.log_scroll = u16::MAX;
+                        ps.log_auto_scroll = true;
+                    }
+                    return Action::None;
+                }
                 _ => {}
             }
 
@@ -1153,24 +1241,6 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                         KeyCode::Enter if ps.game_over => {
                             let post = build_post_game(ps);
                             return Action::Transition(Screen::PostGame(post));
-                        }
-                        KeyCode::Up | KeyCode::Char('k') => {
-                            if ps.show_llamafile_log {
-                                ps.llamafile_log_scroll = ps.llamafile_log_scroll.saturating_sub(1);
-                            } else if ps.sidebar_tab == SidebarTab::Ai {
-                                ps.chat_scroll = ps.chat_scroll.saturating_sub(1);
-                            } else {
-                                ps.log_scroll = ps.log_scroll.saturating_sub(1);
-                            }
-                        }
-                        KeyCode::Down | KeyCode::Char('j') => {
-                            if ps.show_llamafile_log {
-                                ps.llamafile_log_scroll = ps.llamafile_log_scroll.saturating_add(1);
-                            } else if ps.sidebar_tab == SidebarTab::Ai {
-                                ps.chat_scroll = ps.chat_scroll.saturating_add(1);
-                            } else {
-                                ps.log_scroll = ps.log_scroll.saturating_add(1);
-                            }
                         }
                         _ => {}
                     }

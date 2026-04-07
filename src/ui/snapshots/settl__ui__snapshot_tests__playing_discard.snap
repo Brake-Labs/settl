@@ -66,4 +66,4 @@ expression: buffer_to_string(&buf)
 │ Remaining: W:3 B:2 S:1 H:4 O:2  (total: 12)                                                                                                                            │
 │ [w/b/s/h/o] add  [Backspace] undo  [Esc] auto-fill  [Enter] confirm                                                                                                    │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- DISCARD  | q:quit  ?:help  Tab:Game/AI
+ DISCARD  | q:quit  ?:help  j/k:scroll  Tab:Game/AI

@@ -105,6 +105,28 @@ pub fn render_chat_inner(messages: &[ChatMessage], scroll: u16, area: Rect, buf:
         .scroll((effective_scroll, 0));
 
     paragraph.render(area, buf);
+
+    // Scroll indicators: ^ at top-right when scrolled down, v at bottom-right
+    // when more content exists below.
+    if area.height >= 2 && area.width >= 3 && !messages.is_empty() {
+        let indicator_style = Style::default().fg(Color::DarkGray);
+        if effective_scroll > 0 {
+            buf.set_string(
+                area.right().saturating_sub(2),
+                area.top(),
+                "^",
+                indicator_style,
+            );
+        }
+        if effective_scroll < max_scroll {
+            buf.set_string(
+                area.right().saturating_sub(2),
+                area.bottom().saturating_sub(1),
+                "v",
+                indicator_style,
+            );
+        }
+    }
 }
 
 /// Render the AI chat / reasoning panel (with border).

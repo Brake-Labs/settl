@@ -288,6 +288,8 @@ These work in trade targeting, steal targeting, and any player-selection context
 | `L` | Llamafile server log |
 | `+` / `-` | Speed up/slow down AI play |
 | `j` / `k` | Scroll sidebar (game log or AI thoughts) |
+| `PgUp` / `PgDn` | Fast scroll sidebar (10 lines per press) |
+| `G` | Jump to bottom of sidebar (re-enables auto-follow) |
 | Scroll wheel | Scroll active panel (3 lines per tick) |
 
 #### Action Selection (during your turn)
