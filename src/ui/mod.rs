@@ -291,7 +291,11 @@ impl PlayingState {
         const MAX_MESSAGES: usize = 2000;
         self.messages.push(msg);
         if self.messages.len() > MAX_MESSAGES {
-            self.messages.drain(..self.messages.len() - MAX_MESSAGES);
+            let drain_count = self.messages.len() - MAX_MESSAGES;
+            self.messages.drain(..drain_count);
+            if !self.log_auto_scroll {
+                self.log_scroll = self.log_scroll.saturating_sub(drain_count as u16);
+            }
         }
         if self.log_auto_scroll {
             self.log_scroll = u16::MAX;
@@ -438,8 +442,11 @@ impl PlayingState {
                 }
                 const MAX_CHAT: usize = 500;
                 if self.chat_messages.len() > MAX_CHAT {
-                    self.chat_messages
-                        .drain(..self.chat_messages.len() - MAX_CHAT);
+                    let drain_count = self.chat_messages.len() - MAX_CHAT;
+                    self.chat_messages.drain(..drain_count);
+                    if !self.chat_auto_scroll {
+                        self.chat_scroll = self.chat_scroll.saturating_sub(drain_count as u16);
+                    }
                 }
                 if self.chat_auto_scroll {
                     self.chat_scroll = u16::MAX;
@@ -485,8 +492,11 @@ impl PlayingState {
                 });
                 const MAX_CHAT: usize = 500;
                 if self.chat_messages.len() > MAX_CHAT {
-                    self.chat_messages
-                        .drain(..self.chat_messages.len() - MAX_CHAT);
+                    let drain_count = self.chat_messages.len() - MAX_CHAT;
+                    self.chat_messages.drain(..drain_count);
+                    if !self.chat_auto_scroll {
+                        self.chat_scroll = self.chat_scroll.saturating_sub(drain_count as u16);
+                    }
                 }
                 if self.chat_auto_scroll {
                     self.chat_scroll = u16::MAX;
@@ -1179,12 +1189,23 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                     sidebar_scroll(ps, up, 1);
                     return Action::None;
                 }
-                // PageUp/PageDown for fast scrolling (no conflicts in any mode).
-                KeyCode::PageUp => {
+                // PageUp/PageDown for fast scrolling. Excluded from BoardCursor
+                // and StealTarget to avoid accidental sidebar jumps during placement.
+                KeyCode::PageUp
+                    if !matches!(
+                        ps.input_mode,
+                        InputMode::BoardCursor { .. } | InputMode::StealTarget { .. }
+                    ) =>
+                {
                     sidebar_scroll(ps, true, 10);
                     return Action::None;
                 }
-                KeyCode::PageDown => {
+                KeyCode::PageDown
+                    if !matches!(
+                        ps.input_mode,
+                        InputMode::BoardCursor { .. } | InputMode::StealTarget { .. }
+                    ) =>
+                {
                     sidebar_scroll(ps, false, 10);
                     return Action::None;
                 }

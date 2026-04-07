@@ -67,7 +67,7 @@ pub fn render_log_inner(messages: &[String], scroll: u16, area: Rect, buf: &mut 
 
     // Scroll indicators: show ^ at top-right when scrolled down, v at bottom-right
     // when more content exists below.
-    if area.height >= 2 && !messages.is_empty() {
+    if area.height >= 2 && area.width >= 3 && !messages.is_empty() {
         let indicator_style = Style::default().fg(Color::DarkGray);
         if effective_scroll > 0 {
             buf.set_string(
