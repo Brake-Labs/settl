@@ -66,4 +66,4 @@ expression: buffer_to_string(&buf)
 │ Have: W:3 B:2 S:1 H:4 O:2                                                                                                                                              │
 │ [w/b/s/h/o] add  [Tab] switch give/get  [Backspace] undo  [Enter] send  [Esc] cancel                                                                                   │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- TRADING  | q:quit  ?:help  Tab:Game/AI
+ TRADING  | q:quit  ?:help  j/k:scroll  Tab:Game/AI

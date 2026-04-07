@@ -20,6 +20,8 @@ These work on any screen during gameplay:
 | `L` | Llamafile server log |
 | `+` / `-` | Speed up / slow down AI play |
 | `j` / `k` | Scroll sidebar (game log on Game tab, AI thoughts on AI tab) |
+| `PgUp` / `PgDn` | Fast scroll sidebar (10 lines per press) |
+| `G` | Jump to bottom of sidebar (re-enables auto-follow) |
 | Scroll wheel | Scroll active panel (3 lines per tick) |
 
 ## Action Bar (Your Turn)

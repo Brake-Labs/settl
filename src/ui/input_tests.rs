@@ -1279,6 +1279,195 @@ fn mouse_scroll_up_does_not_underflow() {
     assert_eq!(ps.chat_scroll, 0);
 }
 
+// ── Global Scroll (j/k in non-Spectating modes) ─────────────────────
+
+#[test]
+fn jk_scrolls_log_in_action_bar_mode() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::ActionBar {
+        choices: test_action_choices_minimal(),
+    });
+    ps.sidebar_tab = SidebarTab::Game;
+    ps.log_scroll = 5;
+    ps.log_auto_scroll = true;
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('j'));
+    let ps = match &app.screen {
+        Screen::Playing(ps) => ps,
+        _ => panic!(),
+    };
+    assert_eq!(ps.log_scroll, 6);
+    assert!(
+        !ps.log_auto_scroll,
+        "manual scroll should disable auto-scroll"
+    );
+}
+
+#[test]
+fn jk_scrolls_chat_in_trade_builder_mode() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::TradeBuilder {
+        give: [0; 5],
+        get: [0; 5],
+        side: super::TradeSide::Give,
+        available: [3, 3, 3, 3, 3],
+        player_id: 0,
+        validation_msg: None,
+    });
+    ps.sidebar_tab = SidebarTab::Ai;
+    ps.chat_scroll = 10;
+    ps.chat_auto_scroll = true;
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('k'));
+    let ps = match &app.screen {
+        Screen::Playing(ps) => ps,
+        _ => panic!(),
+    };
+    assert_eq!(ps.chat_scroll, 9);
+    assert!(
+        !ps.chat_auto_scroll,
+        "manual scroll should disable auto-scroll"
+    );
+}
+
+#[test]
+fn jk_does_not_scroll_in_board_cursor_mode() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
+    // Set up a BoardCursor mode with real positions.
+    ps.input_mode = InputMode::BoardCursor {
+        legal: super::CursorLegal::Settlements(vec![]),
+        positions: vec![],
+        selected: 0,
+    };
+    ps.sidebar_tab = SidebarTab::Game;
+    ps.log_scroll = 5;
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('j'));
+    let ps = match &app.screen {
+        Screen::Playing(ps) => ps,
+        _ => panic!(),
+    };
+    // log_scroll should NOT change because j/k are cursor movement in BoardCursor.
+    assert_eq!(ps.log_scroll, 5);
+}
+
+#[test]
+fn jk_does_not_scroll_in_steal_target_mode() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::StealTarget {
+        targets: vec![(1, "Bob".into()), (2, "Charlie".into())],
+        selected: 0,
+    });
+    ps.sidebar_tab = SidebarTab::Game;
+    ps.log_scroll = 5;
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('j'));
+    let ps = match &app.screen {
+        Screen::Playing(ps) => ps,
+        _ => panic!(),
+    };
+    // log_scroll should NOT change because j/k navigate the steal target list.
+    assert_eq!(ps.log_scroll, 5);
+}
+
+#[test]
+fn pageup_pagedown_scrolls_in_all_modes() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::ActionBar {
+        choices: test_action_choices_minimal(),
+    });
+    ps.sidebar_tab = SidebarTab::Game;
+    ps.log_scroll = 20;
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::PageUp);
+    let ps = match &app.screen {
+        Screen::Playing(ps) => ps,
+        _ => panic!(),
+    };
+    assert_eq!(ps.log_scroll, 10);
+
+    handle_input(&mut app, KeyCode::PageDown);
+    let ps = match &app.screen {
+        Screen::Playing(ps) => ps,
+        _ => panic!(),
+    };
+    assert_eq!(ps.log_scroll, 20);
+}
+
+#[test]
+fn g_key_jumps_to_bottom_and_reenables_auto_scroll() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
+    ps.sidebar_tab = SidebarTab::Game;
+    ps.log_scroll = 5;
+    ps.log_auto_scroll = false;
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('G'));
+    let ps = match &app.screen {
+        Screen::Playing(ps) => ps,
+        _ => panic!(),
+    };
+    assert_eq!(ps.log_scroll, u16::MAX);
+    assert!(ps.log_auto_scroll, "G should re-enable auto-scroll");
+}
+
+#[test]
+fn g_key_affects_chat_when_ai_tab_active() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
+    ps.sidebar_tab = SidebarTab::Ai;
+    ps.chat_scroll = 5;
+    ps.chat_auto_scroll = false;
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('G'));
+    let ps = match &app.screen {
+        Screen::Playing(ps) => ps,
+        _ => panic!(),
+    };
+    assert_eq!(ps.chat_scroll, u16::MAX);
+    assert!(ps.chat_auto_scroll, "G should re-enable chat auto-scroll");
+}
+
+#[test]
+fn mouse_scroll_disables_auto_scroll() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
+    ps.sidebar_tab = SidebarTab::Game;
+    ps.log_scroll = 0;
+    ps.log_auto_scroll = true;
+
+    handle_mouse_scroll(&mut ps, MouseEventKind::ScrollDown);
+    assert!(
+        !ps.log_auto_scroll,
+        "mouse scroll should disable auto-scroll"
+    );
+}
+
+#[test]
+fn push_message_respects_auto_scroll_off() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
+    ps.log_scroll = 5;
+    ps.log_auto_scroll = false;
+
+    ps.push_message("test message".into());
+
+    assert_eq!(
+        ps.log_scroll, 5,
+        "scroll should not change when auto-scroll is off"
+    );
+}
+
+#[test]
+fn push_message_scrolls_to_bottom_when_auto_scroll_on() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
+    ps.log_scroll = 0;
+    ps.log_auto_scroll = true;
+
+    ps.push_message("test message".into());
+
+    assert_eq!(ps.log_scroll, u16::MAX, "auto-scroll should jump to bottom");
+}
+
 // ── PostGame ─────────────────────────────────────────────────────────
 
 #[test]

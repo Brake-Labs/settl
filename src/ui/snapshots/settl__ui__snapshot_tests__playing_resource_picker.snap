@@ -66,4 +66,4 @@ expression: buffer_to_string(&buf)
 │                                                                                                                                                                        │
 │ [w]ood  [b]rick  [s]heep  [h]arvest(wheat)  [o]re                                                                                                                      │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- PICK RESOURCE  | q:quit  ?:help  Tab:Game/AI
+ PICK RESOURCE  | q:quit  ?:help  j/k:scroll  Tab:Game/AI

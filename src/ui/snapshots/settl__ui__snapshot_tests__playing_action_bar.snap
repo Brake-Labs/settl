@@ -66,4 +66,4 @@ expression: buffer_to_string(&buf)
 │                                                                                                                                                                        │
 │ [s]ettlement  [r]oad  [c]ity  [d]ev card  [b]ank trade  [t]rade  [e]nd turn                                                                                            │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- YOUR TURN  | q:quit  ?:help  Tab:Game/AI
+ YOUR TURN  | q:quit  ?:help  j/k:scroll  Tab:Game/AI

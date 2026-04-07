@@ -66,4 +66,4 @@ expression: buffer_to_string(&buf)
 │ Offering: 2 Wood  Wanting: 1 Ore                                                                                                                                       │
 │ [y]es accept  [n]o reject                                                                                                                                              │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- TRADE OFFER  | q:quit  ?:help  Tab:Game/AI
+ TRADE OFFER  | q:quit  ?:help  j/k:scroll  Tab:Game/AI

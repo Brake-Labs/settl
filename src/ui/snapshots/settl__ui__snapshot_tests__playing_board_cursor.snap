@@ -66,4 +66,4 @@ expression: buffer_to_string(&buf)
 │                                                                                                                                                                        │
 │ [Arrows/h/j/k/l] move  [n/p] next/prev  [Enter] confirm                                                                                                                │
 └────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
- PLACING  | q:quit  ?:help  Tab:Game/AI
+ PLACING  | q:quit  ?:help  j/k:scroll  Tab:Game/AI

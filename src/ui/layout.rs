@@ -468,7 +468,7 @@ fn draw_status_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
             Style::default().fg(Color::Black).bg(Color::Cyan).bold(),
         ),
         Span::styled(
-            " | q:quit  ?:help  Tab:Game/AI ",
+            " | q:quit  ?:help  j/k:scroll  Tab:Game/AI ",
             Style::default().fg(Color::DarkGray),
         ),
         Span::styled(
@@ -563,7 +563,9 @@ fn draw_help_overlay(f: &mut Frame, area: Rect) {
         Line::from("  q        Quit / back to menu"),
         Line::from("  ?        Toggle this help"),
         Line::from("  Tab      Switch sidebar (Game/AI)"),
-        Line::from("  j / k    Scroll active panel"),
+        Line::from("  j / k    Scroll sidebar"),
+        Line::from("  PgUp/Dn  Fast scroll (10 lines)"),
+        Line::from("  G        Jump to bottom"),
         Line::from("  L        Llamafile server log"),
         Line::from(""),
         Line::from(Span::styled(
