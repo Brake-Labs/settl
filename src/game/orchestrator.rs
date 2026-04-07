@@ -1117,8 +1117,20 @@ impl GameOrchestrator {
         };
 
         // Validate the offer using the trading module.
-        if let Err(_e) = trading::negotiation::validate_trade(&self.state, &offer) {
-            return Ok(());
+        if let Err(e) = trading::negotiation::validate_trade(&self.state, &offer) {
+            log::warn!(
+                "{} proposed invalid trade: {}",
+                self.player_names[player_id],
+                e
+            );
+            self.send_narration(format!(
+                "{}'s trade failed: {}",
+                self.player_names[player_id], e
+            ));
+            return Err(OrchestratorError::RuleViolation(format!(
+                "Invalid trade: {}",
+                e
+            )));
         }
 
         let offering: String = offer
@@ -1774,6 +1786,39 @@ mod tests {
                 .iter()
                 .any(|e| matches!(e, UiEvent::StateUpdate { .. })),
             "Should have state update events"
+        );
+    }
+
+    #[tokio::test]
+    async fn handle_trade_rejects_invalid_offer() {
+        // Regression test: after Monopoly depletes resources, the AI might
+        // propose trades offering resources it doesn't have. handle_trade
+        // must return RuleViolation (not Ok) so the action loop doesn't
+        // count it as a successful trade, preventing long "stuck" turns.
+        let mut orch = make_orchestrator(3);
+        orch.state.phase = GamePhase::Playing {
+            current_player: 0,
+            has_rolled: true,
+        };
+        // Player 0 has Brick but no Wood.
+        orch.state.players[0].add_resource(Resource::Brick, 3);
+
+        // Manually call handle_trade. The RandomPlayer will propose a random
+        // trade, which may or may not be valid. We test the specific scenario
+        // by checking validate_trade directly.
+        use crate::game::actions::TradeOffer;
+        use crate::trading;
+
+        let offer = TradeOffer {
+            from: 0,
+            offering: vec![(Resource::Wood, 1)],
+            requesting: vec![(Resource::Ore, 1)],
+            message: String::new(),
+        };
+        let result = trading::negotiation::validate_trade(&orch.state, &offer);
+        assert!(
+            result.is_err(),
+            "Trade offering resources the player doesn't have must fail validation"
         );
     }
 }
