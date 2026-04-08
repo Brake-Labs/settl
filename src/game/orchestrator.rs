@@ -457,6 +457,10 @@ impl GameOrchestrator {
             has_rolled: true,
         };
 
+        // Sync the UI with post-roll state (distributed resources or robber move)
+        // before the action loop, so the resource bar matches reality.
+        self.send_ui(String::new(), None);
+
         // Step 3: Action loop -- player takes actions until EndTurn.
         let max_actions_per_turn = 15;
         let max_trades_per_turn = 3;
@@ -695,6 +699,10 @@ impl GameOrchestrator {
                 player: p,
                 cards: cards.clone(),
             });
+            self.send_ui(
+                format!("{} discarded {} cards", self.player_names[p], cards.len()),
+                None,
+            );
         }
 
         // Step 2: Move robber.
@@ -776,6 +784,11 @@ impl GameOrchestrator {
                 stole_from: None,
             });
         }
+
+        self.send_ui(
+            format!("{} placed the robber", self.player_names[roller]),
+            None,
+        );
 
         Ok(())
     }
