@@ -1189,25 +1189,22 @@ impl GameOrchestrator {
 
         // Step 2: Find eligible responders and collect responses.
         let eligible = trading::negotiation::eligible_responders(&self.state, &offer);
+
+        // Short-circuit: if nobody has the requested resources, fail immediately
+        // with a clear message instead of silently rejecting on everyone's behalf.
+        if eligible.is_empty() {
+            self.send_ui(
+                format!("Trade failed: no one has [{}] to trade", requesting),
+                None,
+            );
+            self.send_narration("No player has the requested resources.".into());
+            self.turn_rejected_offers.push(offer_key);
+            return Ok(());
+        }
+
         let mut accepted_by: Option<PlayerId> = None;
 
-        for other_id in 0..self.state.num_players {
-            if other_id == player_id {
-                continue;
-            }
-
-            if !eligible.contains(&other_id) {
-                self.send_narration(format!(
-                    "{} can't trade (insufficient resources)",
-                    self.player_names[other_id]
-                ));
-                self.record_event(GameEvent::TradeRejected {
-                    by: other_id,
-                    reasoning: "Insufficient resources".into(),
-                });
-                continue;
-            }
-
+        for &other_id in &eligible {
             self.send_narration(format!(
                 "{} is considering the trade...",
                 self.player_names[other_id]
@@ -1292,7 +1289,7 @@ impl GameOrchestrator {
                 ),
                 None,
             );
-            self.send_narration("No player could fulfill the trade.".into());
+            self.send_narration("All eligible players declined the trade.".into());
             self.turn_rejected_offers.push(offer_key);
         }
 
