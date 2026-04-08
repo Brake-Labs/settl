@@ -250,6 +250,8 @@ pub struct PlayingState {
     pub last_roll: Option<(u8, u8, u8)>,
     /// Index of the local human player (None in spectator/all-AI mode).
     pub human_player_index: Option<usize>,
+    /// Auto-reject all incoming trade offers until the player's next turn.
+    pub auto_reject_trades: bool,
 }
 
 impl PlayingState {
@@ -286,6 +288,7 @@ impl PlayingState {
             hex_grid: None,
             last_roll: None,
             human_player_index: None,
+            auto_reject_trades: false,
         }
     }
 
@@ -322,8 +325,17 @@ impl PlayingState {
 
     /// Convert an incoming HumanPrompt into the appropriate InputMode.
     fn apply_prompt(&mut self, prompt: player::tui_human::HumanPrompt) {
+        // Auto-reject trade offers when the player has opted out until their turn.
+        if self.auto_reject_trades && matches!(prompt.kind, PromptKind::RespondToTrade { .. }) {
+            self.send_response(HumanResponse::TradeAnswer(false));
+            return;
+        }
+
         self.input_mode = match prompt.kind {
-            PromptKind::ChooseAction { choices } => InputMode::ActionBar { choices },
+            PromptKind::ChooseAction { choices } => {
+                self.auto_reject_trades = false;
+                InputMode::ActionBar { choices }
+            }
             PromptKind::PlaceSettlement { legal } => {
                 let positions = self.compute_cursor_positions(
                     &legal,
@@ -1525,6 +1537,11 @@ fn handle_input(app: &mut App, key: KeyCode) -> Action {
                             ps.input_mode = InputMode::Spectating;
                         }
                         KeyCode::Char('n') | KeyCode::Esc => {
+                            ps.send_response(HumanResponse::TradeAnswer(false));
+                            ps.input_mode = InputMode::Spectating;
+                        }
+                        KeyCode::Char('s') => {
+                            ps.auto_reject_trades = true;
                             ps.send_response(HumanResponse::TradeAnswer(false));
                             ps.input_mode = InputMode::Spectating;
                         }

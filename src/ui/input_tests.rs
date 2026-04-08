@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, MouseEventKind};
 
 use crate::game::actions::{Action as GameAction, TradeOffer};
 use crate::game::board::Resource;
-use crate::player::tui_human::HumanResponse;
+use crate::player::tui_human::{HumanPrompt, HumanResponse, PromptKind};
 use crate::player::PlayerChoice;
 
 use super::screens::*;
@@ -1131,6 +1131,68 @@ fn trade_response_esc_rejects() {
 
     let resp = rx.try_recv().unwrap();
     assert!(matches!(resp, HumanResponse::TradeAnswer(false)));
+}
+
+#[test]
+fn trade_response_s_rejects_and_sets_auto_reject() {
+    let offer = TradeOffer {
+        from: 1,
+        offering: vec![(Resource::Wood, 1)],
+        requesting: vec![(Resource::Ore, 1)],
+        message: String::new(),
+    };
+    let (ps, mut rx) = make_test_playing_state(InputMode::TradeResponse { offer });
+    let mut app = make_test_app(Screen::Playing(ps));
+
+    handle_input(&mut app, KeyCode::Char('s'));
+
+    let resp = rx.try_recv().unwrap();
+    assert!(matches!(resp, HumanResponse::TradeAnswer(false)));
+    if let Screen::Playing(ps) = &app.screen {
+        assert!(ps.auto_reject_trades);
+        assert!(matches!(ps.input_mode, InputMode::Spectating));
+    } else {
+        panic!("expected Playing screen");
+    }
+}
+
+#[test]
+fn auto_reject_skips_trade_prompt() {
+    let (mut ps, mut rx) = make_test_playing_state(InputMode::Spectating);
+    ps.auto_reject_trades = true;
+
+    let offer = TradeOffer {
+        from: 1,
+        offering: vec![(Resource::Wood, 1)],
+        requesting: vec![(Resource::Ore, 1)],
+        message: String::new(),
+    };
+    ps.apply_prompt(HumanPrompt {
+        player_id: 0,
+        kind: PromptKind::RespondToTrade { offer },
+    });
+
+    // Should have auto-rejected without changing input mode.
+    assert!(matches!(ps.input_mode, InputMode::Spectating));
+    let resp = rx.try_recv().unwrap();
+    assert!(matches!(resp, HumanResponse::TradeAnswer(false)));
+    assert!(ps.auto_reject_trades);
+}
+
+#[test]
+fn auto_reject_cleared_on_choose_action() {
+    let (mut ps, _rx) = make_test_playing_state(InputMode::Spectating);
+    ps.auto_reject_trades = true;
+
+    ps.apply_prompt(HumanPrompt {
+        player_id: 0,
+        kind: PromptKind::ChooseAction {
+            choices: vec![PlayerChoice::GameAction(GameAction::EndTurn)],
+        },
+    });
+
+    assert!(!ps.auto_reject_trades);
+    assert!(matches!(ps.input_mode, InputMode::ActionBar { .. }));
 }
 
 // ── Spectating ───────────────────────────────────────────────────────

@@ -380,8 +380,9 @@ Faster than a multi-select grid for most cases.
 |-----|--------|
 | `y` / `Enter` | Accept |
 | `n` / `Esc` | Reject |
+| `s` | Reject and auto-reject all trades until your next turn |
 
-Two keys. Fast response keeps the game moving.
+Fast response keeps the game moving. `s` lets you opt out of trade interruptions entirely until your turn comes around again.
 
 ## Information Hierarchy
 
