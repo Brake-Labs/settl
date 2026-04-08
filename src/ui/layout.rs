@@ -545,7 +545,7 @@ fn draw_context_bar(f: &mut Frame, ps: &PlayingState, area: Rect) {
                 )),
                 Line::from(offer_spans),
                 Line::from(Span::styled(
-                    " [y]es accept  [n]o reject",
+                    " [y]es accept  [n]o reject  [s]kip til my turn",
                     Style::default().fg(Color::White),
                 )),
             ];
@@ -722,6 +722,7 @@ fn draw_help_overlay(f: &mut Frame, area: Rect) {
         )),
         Line::from("  y / Enter   Accept"),
         Line::from("  n / Esc     Reject"),
+        Line::from("  s           Skip til my turn (auto-reject)"),
     ];
 
     let para = Paragraph::new(help_text).wrap(Wrap { trim: false });

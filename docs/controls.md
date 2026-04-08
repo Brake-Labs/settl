@@ -97,6 +97,7 @@ When another player offers you a trade:
 |-----|--------|
 | `y` / `Enter` | Accept |
 | `n` / `Esc` | Reject |
+| `s` | Reject and auto-reject all trades until your next turn |
 
 ## Player Keys
 
